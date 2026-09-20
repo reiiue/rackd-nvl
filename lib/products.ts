@@ -11,7 +11,6 @@ type SupabaseProduct = {
   size: string;
   color: string;
   condition: string;
-
   category: string;
 
   image: string;
@@ -23,10 +22,10 @@ type SupabaseProduct = {
   } | null;
 
   description: string | null;
-
   status: "available" | "sold";
-
   created_at: string;
+
+  product_images?: SupabaseProductImage[];
 };
 
 type SupabaseProductImage = {
@@ -37,11 +36,8 @@ type SupabaseProductImage = {
   created_at: string;
 };
 
-function formatProduct(
-  product: SupabaseProduct,
-  images: SupabaseProductImage[] = []
-): Product {
-  const sortedImages = [...images]
+function formatProduct(product: SupabaseProduct): Product {
+  const sortedImages = [...(product.product_images ?? [])]
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((image) => image.image_url);
 
@@ -59,6 +55,7 @@ function formatProduct(
     color: product.color,
     condition: product.condition,
     category: product.category,
+
     image: product.image,
 
     ...(sortedImages.length > 0 && {
@@ -77,10 +74,35 @@ function formatProduct(
   };
 }
 
+/**
+ * Get all products.
+ */
 export async function getProducts(): Promise<Product[]> {
   const { data, error } = await supabase
     .from("products")
-    .select("*")
+    .select(`
+      id,
+      name,
+      brand,
+      price,
+      original_price,
+      size,
+      color,
+      condition,
+      category,
+      image,
+      measurements,
+      description,
+      status,
+      created_at,
+      product_images (
+        id,
+        product_id,
+        image_url,
+        sort_order,
+        created_at
+      )
+    `)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -98,40 +120,40 @@ export async function getProducts(): Promise<Product[]> {
     return [];
   }
 
-  const productIds = data.map((product) => product.id);
-
-  const { data: imageData, error: imageError } = await supabase
-    .from("product_images")
-    .select("*")
-    .in("product_id", productIds)
-    .order("sort_order", { ascending: true });
-
-  if (imageError) {
-    console.error("Error fetching product images:", {
-      code: imageError.code,
-      message: imageError.message,
-      details: imageError.details,
-      hint: imageError.hint,
-    });
-  }
-
-  const images = (imageData ?? []) as SupabaseProductImage[];
-
-  return (data as SupabaseProduct[]).map((product) => {
-    const productImages = images.filter(
-      (image) => image.product_id === product.id
-    );
-
-    return formatProduct(product, productImages);
-  });
+  return (data as SupabaseProduct[]).map(formatProduct);
 }
 
+/**
+ * Get a single product.
+ */
 export async function getProductById(
   id: string
 ): Promise<Product | null> {
   const { data, error } = await supabase
     .from("products")
-    .select("*")
+    .select(`
+      id,
+      name,
+      brand,
+      price,
+      original_price,
+      size,
+      color,
+      condition,
+      category,
+      image,
+      measurements,
+      description,
+      status,
+      created_at,
+      product_images (
+        id,
+        product_id,
+        image_url,
+        sort_order,
+        created_at
+      )
+    `)
     .eq("id", id)
     .single();
 
@@ -151,24 +173,5 @@ export async function getProductById(
     return null;
   }
 
-  const { data: imageData, error: imageError } = await supabase
-    .from("product_images")
-    .select("*")
-    .eq("product_id", id)
-    .order("sort_order", { ascending: true });
-
-  if (imageError) {
-    console.error("Error fetching product images:", {
-      id,
-      code: imageError.code,
-      message: imageError.message,
-      details: imageError.details,
-      hint: imageError.hint,
-    });
-  }
-
-  return formatProduct(
-    data as SupabaseProduct,
-    (imageData ?? []) as SupabaseProductImage[]
-  );
+  return formatProduct(data as SupabaseProduct);
 }

@@ -27,11 +27,16 @@ export async function generateMetadata({
 
   return {
     title: product.name,
+
     description: `${product.brand} ${product.name} — ₱${product.price.toLocaleString()} at rackd.nvl.`,
+
     openGraph: {
       title: `${product.name} | rackd.nvl`,
+
       description: `${product.brand} ${product.name} — ₱${product.price.toLocaleString()}.`,
+
       type: "website",
+
       images: product.image
         ? [
             {
@@ -49,7 +54,6 @@ export default async function ProductPage({
 }: ProductPageProps) {
   const { id } = await params;
 
-  // Get product from Supabase
   const product = await getProductById(id);
 
   if (!product) {
@@ -58,10 +62,9 @@ export default async function ProductPage({
 
   const isSold = product.status === "sold";
 
-  const productImages =
-    product.images?.length
-      ? product.images
-      : [product.image];
+  const productImages = product.images?.length
+    ? product.images
+    : [product.image];
 
   return (
     <main className="min-h-screen bg-white">
@@ -245,6 +248,7 @@ export default async function ProductPage({
                 </div>
               ) : (
                 <>
+                  {/* DM to Order */}
                   <a
                     href="https://www.facebook.com/profile.php?id=61594242150610"
                     target="_blank"
@@ -256,7 +260,6 @@ export default async function ProductPage({
                     </span>
                   </a>
 
-
                   {/* How to Order */}
                   <div className="mt-8 border-t border-neutral-200 pt-8">
                     <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-400">
@@ -264,6 +267,7 @@ export default async function ProductPage({
                     </h2>
 
                     <ol className="mt-5 space-y-4">
+                      {/* Step 1 */}
                       <li className="flex gap-4">
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs font-medium">
                           1
@@ -274,16 +278,22 @@ export default async function ProductPage({
                         </p>
                       </li>
 
+                      {/* Step 2 */}
                       <li className="flex gap-4">
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs font-medium">
                           2
                         </span>
 
                         <p className="pt-1 text-sm leading-6 text-neutral-600">
-                          Press the <span className="font-medium text-black">DM to Order</span> button.
+                          Press the{" "}
+                          <span className="font-medium text-black">
+                            DM to Order
+                          </span>{" "}
+                          button.
                         </p>
                       </li>
 
+                      {/* Step 3 */}
                       <li className="flex gap-4">
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs font-medium">
                           3
@@ -303,18 +313,19 @@ export default async function ProductPage({
                         </p>
                       </li>
 
+                      {/* Step 4 */}
                       <li className="flex gap-4">
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs font-medium">
                           4
                         </span>
 
                         <p className="pt-1 text-sm leading-6 text-neutral-600">
-                          Our team will assist you with the next steps to get your chosen items.
+                          Our team will assist you with the next steps to get
+                          your chosen items.
                         </p>
                       </li>
                     </ol>
                   </div>
-
                 </>
               )}
             </section>
