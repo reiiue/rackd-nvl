@@ -6,7 +6,9 @@ import {
   useMemo,
   useState,
 } from "react";
+
 import { useRouter } from "next/navigation";
+
 import { supabase } from "@/lib/supabase";
 
 function createProductId(name: string) {
@@ -21,26 +23,249 @@ function createProductId(name: string) {
   return `${slug}-${uniquePart}`;
 }
 
+/**
+ * Resize and convert an image to WebP before uploading.
+ *
+ * Supports:
+ * - JPG / JPEG
+ * - PNG
+ * - WEBP
+ * - HEIC / HEIF
+ *
+ * Maximum dimension:
+ * 1600px
+ *
+ * WebP quality:
+ * 82%
+ */
+async function optimizeImage(file: File): Promise<File> {
+  let inputFile = file;
+
+  /*
+   * HEIC / HEIF files cannot normally be decoded by the
+   * browser's Image() API.
+   *
+   * Convert them to JPEG first using heic2any.
+   */
+  const isHeic =
+    file.type === "image/heic" ||
+    file.type === "image/heif" ||
+    /\.hei(c|f)$/i.test(file.name);
+
+  if (isHeic) {
+    try {
+      const heic2any = (
+        await import("heic2any")
+      ).default;
+
+      const convertedBlob = await heic2any({
+        blob: file,
+        toType: "image/jpeg",
+        quality: 0.9,
+      });
+
+      const jpegBlob = Array.isArray(
+        convertedBlob
+      )
+        ? convertedBlob[0]
+        : convertedBlob;
+
+      inputFile = new File(
+        [jpegBlob],
+        file.name.replace(
+          /\.(heic|heif)$/i,
+          ".jpg"
+        ),
+        {
+          type: "image/jpeg",
+          lastModified: Date.now(),
+        }
+      );
+    } catch (error) {
+      console.error(
+        "HEIC conversion error:",
+        error
+      );
+
+      throw new Error(
+        `Could not convert ${file.name}. Please try the photo again.`
+      );
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+
+    const objectUrl =
+      URL.createObjectURL(inputFile);
+
+    image.onload = () => {
+      try {
+        const maxSize = 1600;
+
+        let width = image.naturalWidth;
+        let height = image.naturalHeight;
+
+        if (
+          width > maxSize ||
+          height > maxSize
+        ) {
+          const scale = Math.min(
+            maxSize / width,
+            maxSize / height
+          );
+
+          width = Math.round(
+            width * scale
+          );
+
+          height = Math.round(
+            height * scale
+          );
+        }
+
+        const canvas =
+          document.createElement(
+            "canvas"
+          );
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const context =
+          canvas.getContext("2d");
+
+        if (!context) {
+          URL.revokeObjectURL(
+            objectUrl
+          );
+
+          reject(
+            new Error(
+              `Could not process image: ${file.name}`
+            )
+          );
+
+          return;
+        }
+
+        context.imageSmoothingEnabled =
+          true;
+
+        context.imageSmoothingQuality =
+          "high";
+
+        context.drawImage(
+          image,
+          0,
+          0,
+          width,
+          height
+        );
+
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(
+              objectUrl
+            );
+
+            if (!blob) {
+              reject(
+                new Error(
+                  `Could not convert image: ${file.name}`
+                )
+              );
+
+              return;
+            }
+
+            const baseName =
+              file.name.replace(
+                /\.[^/.]+$/,
+                ""
+              );
+
+            const optimizedFile =
+              new File(
+                [blob],
+                `${baseName}.webp`,
+                {
+                  type: "image/webp",
+                  lastModified:
+                    Date.now(),
+                }
+              );
+
+            resolve(
+              optimizedFile
+            );
+          },
+          "image/webp",
+          0.82
+        );
+      } catch (error) {
+        URL.revokeObjectURL(
+          objectUrl
+        );
+
+        reject(error);
+      }
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(
+        objectUrl
+      );
+
+      reject(
+        new Error(
+          `Could not read image: ${file.name}. Please use JPG, PNG, WEBP, HEIC, or HEIF.`
+        )
+      );
+    };
+
+    image.src = objectUrl;
+  });
+}
+
 export default function NewProductPage() {
   const router = useRouter();
 
   const [name, setName] = useState("");
   const [brand, setBrand] = useState("");
   const [price, setPrice] = useState("");
-  const [originalPrice, setOriginalPrice] = useState("");
+  const [originalPrice, setOriginalPrice] =
+    useState("");
+
   const [size, setSize] = useState("");
   const [color, setColor] = useState("");
-  const [condition, setCondition] = useState("");
-  const [category, setCategory] = useState("");
-  const [length, setLength] = useState("");
-  const [width, setWidth] = useState("");
-  const [waist, setWaist] = useState("");
-  const [description, setDescription] = useState("");
+  const [condition, setCondition] =
+    useState("");
+  const [category, setCategory] =
+    useState("");
 
-  const [images, setImages] = useState<File[]>([]);
+  const [length, setLength] =
+    useState("");
+  const [width, setWidth] =
+    useState("");
+  const [waist, setWaist] =
+    useState("");
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [description, setDescription] =
+    useState("");
+
+  const [images, setImages] = useState<
+    File[]
+  >([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [loadingMessage, setLoadingMessage] =
+    useState("");
+
+  const [error, setError] =
+    useState("");
 
   const imagePreviews = useMemo(() => {
     return images.map((file) => ({
@@ -62,7 +287,9 @@ export default function NewProductPage() {
   ) {
     if (!event.target.files) return;
 
-    const newImages = Array.from(event.target.files);
+    const newImages = Array.from(
+      event.target.files
+    );
 
     setImages((currentImages) => [
       ...currentImages,
@@ -72,10 +299,13 @@ export default function NewProductPage() {
     event.target.value = "";
   }
 
-  function removeImage(indexToRemove: number) {
+  function removeImage(
+    indexToRemove: number
+  ) {
     setImages((currentImages) =>
       currentImages.filter(
-        (_, index) => index !== indexToRemove
+        (_, index) =>
+          index !== indexToRemove
       )
     );
   }
@@ -89,34 +319,95 @@ export default function NewProductPage() {
   ) {
     event.preventDefault();
 
+    if (loading) return;
+
     setError("");
     setLoading(true);
+    setLoadingMessage(
+      "Optimizing photos..."
+    );
 
-    const productId = createProductId(name);
+    const productId =
+      createProductId(name);
+
+    const optimizedImages: File[] = [];
+    const uploadedStoragePaths: string[] =
+      [];
 
     try {
-      // 1. Create the product
-      const { error: productError } = await supabase
+      /*
+       * 1. Optimize all selected images
+       *
+       * JPG / PNG / WEBP:
+       * → resize if necessary
+       * → convert to WebP
+       *
+       * HEIC / HEIF:
+       * → convert to JPEG
+       * → resize if necessary
+       * → convert to WebP
+       */
+      for (
+        let index = 0;
+        index < images.length;
+        index++
+      ) {
+        const file = images[index];
+
+        try {
+          const optimizedFile =
+            await optimizeImage(file);
+
+          optimizedImages.push(
+            optimizedFile
+          );
+        } catch (imageError) {
+          throw new Error(
+            imageError instanceof Error
+              ? imageError.message
+              : `Could not optimize ${file.name}`
+          );
+        }
+      }
+
+      /*
+       * 2. Create the product
+       */
+      setLoadingMessage(
+        "Creating product..."
+      );
+
+      const {
+        error: productError,
+      } = await supabase
         .from("products")
         .insert({
           id: productId,
           name,
           brand,
           price: Number(price),
-          original_price: originalPrice
-            ? Number(originalPrice)
-            : null,
+
+          original_price:
+            originalPrice
+              ? Number(originalPrice)
+              : null,
+
           size,
           color,
           condition,
           category,
+
           image: "",
+
           measurements: {
             ...(length && { length }),
             ...(width && { width }),
             ...(waist && { waist }),
           },
-          description: description || null,
+
+          description:
+            description || null,
+
           status: "available",
         });
 
@@ -126,10 +417,25 @@ export default function NewProductPage() {
           productError
         );
 
-        throw new Error(productError.message);
+        throw new Error(
+          productError.message
+        );
       }
 
-      // 2. Upload images
+      /*
+       * 3. Upload optimized images
+       *
+       * UUID filenames prevent:
+       *
+       * "The resource already exists"
+       *
+       * errors when the same product/image
+       * path is uploaded again.
+       */
+      setLoadingMessage(
+        "Uploading photos..."
+      );
+
       const uploadedImages: {
         image_url: string;
         sort_order: number;
@@ -137,24 +443,33 @@ export default function NewProductPage() {
 
       for (
         let index = 0;
-        index < images.length;
+        index < optimizedImages.length;
         index++
       ) {
-        const file = images[index];
+        const file =
+          optimizedImages[index];
 
-        const extension =
-          file.name.split(".").pop()?.toLowerCase() ||
-          "jpg";
+        const uniqueFileName =
+          `${crypto.randomUUID()}.webp`;
 
-        const filePath = `${productId}/${index + 1}.${extension}`;
+        const filePath =
+          `${productId}/${uniqueFileName}`;
 
-        const { error: uploadError } =
-          await supabase.storage
-            .from("product-images")
-            .upload(filePath, file, {
-              cacheControl: "3600",
+        const {
+          error: uploadError,
+        } = await supabase.storage
+          .from("product-images")
+          .upload(
+            filePath,
+            file,
+            {
+              cacheControl:
+                "31536000",
               upsert: false,
-            });
+              contentType:
+                "image/webp",
+            }
+          );
 
         if (uploadError) {
           console.error(
@@ -162,14 +477,24 @@ export default function NewProductPage() {
             uploadError
           );
 
-          throw new Error(uploadError.message);
+          throw new Error(
+            uploadError.message
+          );
         }
 
+        uploadedStoragePaths.push(
+          filePath
+        );
+
         const {
-          data: { publicUrl },
+          data: {
+            publicUrl,
+          },
         } = supabase.storage
           .from("product-images")
-          .getPublicUrl(filePath);
+          .getPublicUrl(
+            filePath
+          );
 
         uploadedImages.push({
           image_url: publicUrl,
@@ -177,18 +502,32 @@ export default function NewProductPage() {
         });
       }
 
-      // 3. Save image URLs
-      if (uploadedImages.length > 0) {
-        const { error: imageInsertError } =
-          await supabase
-            .from("product_images")
-            .insert(
-              uploadedImages.map((image) => ({
-                product_id: productId,
-                image_url: image.image_url,
-                sort_order: image.sort_order,
-              }))
-            );
+      /*
+       * 4. Save image URLs
+       */
+      setLoadingMessage(
+        "Saving product photos..."
+      );
+
+      if (
+        uploadedImages.length > 0
+      ) {
+        const {
+          error: imageInsertError,
+        } = await supabase
+          .from("product_images")
+          .insert(
+            uploadedImages.map(
+              (image) => ({
+                product_id:
+                  productId,
+                image_url:
+                  image.image_url,
+                sort_order:
+                  image.sort_order,
+              })
+            )
+          );
 
         if (imageInsertError) {
           console.error(
@@ -201,14 +540,22 @@ export default function NewProductPage() {
           );
         }
 
-        // 4. Set first image as main product image
-        const { error: updateError } =
-          await supabase
-            .from("products")
-            .update({
-              image: uploadedImages[0].image_url,
-            })
-            .eq("id", productId);
+        /*
+         * 5. Set first image as main image
+         */
+        const {
+          error: updateError,
+        } = await supabase
+          .from("products")
+          .update({
+            image:
+              uploadedImages[0]
+                .image_url,
+          })
+          .eq(
+            "id",
+            productId
+          );
 
         if (updateError) {
           console.error(
@@ -216,11 +563,19 @@ export default function NewProductPage() {
             updateError
           );
 
-          throw new Error(updateError.message);
+          throw new Error(
+            updateError.message
+          );
         }
       }
 
-      // 5. Redirect with success notification
+      /*
+       * 6. Redirect with success notification
+       */
+      setLoadingMessage(
+        "Product created successfully."
+      );
+
       router.push(
         `/admin/products/${productId}?created=true`
       );
@@ -232,6 +587,52 @@ export default function NewProductPage() {
         error
       );
 
+      /*
+       * CLEANUP
+       *
+       * If something fails after the
+       * product was created, remove
+       * uploaded images and the
+       * incomplete product.
+       */
+      if (
+        uploadedStoragePaths.length > 0
+      ) {
+        const {
+          error:
+            storageCleanupError,
+        } = await supabase.storage
+          .from("product-images")
+          .remove(
+            uploadedStoragePaths
+          );
+
+        if (storageCleanupError) {
+          console.error(
+            "Storage cleanup error:",
+            storageCleanupError
+          );
+        }
+      }
+
+      const {
+        error:
+          productCleanupError,
+      } = await supabase
+        .from("products")
+        .delete()
+        .eq(
+          "id",
+          productId
+        );
+
+      if (productCleanupError) {
+        console.error(
+          "Product cleanup error:",
+          productCleanupError
+        );
+      }
+
       setError(
         error instanceof Error
           ? error.message
@@ -239,20 +640,32 @@ export default function NewProductPage() {
       );
 
       setLoading(false);
+      setLoadingMessage("");
     }
   }
 
-  const displayName = name || "Product Name";
-  const displayBrand = brand || "Brand";
-  const displaySize = size || "—";
-  const displayColor = color || "—";
+  const displayName =
+    name || "Product Name";
+
+  const displayBrand =
+    brand || "Brand";
+
+  const displaySize =
+    size || "—";
+
+  const displayColor =
+    color || "—";
+
   const displayCondition =
     condition || "Condition";
+
   const displayCategory =
     category || "Category";
 
   const formattedPrice = price
-    ? `₱${Number(price).toLocaleString()}`
+    ? `₱${Number(
+        price
+      ).toLocaleString()}`
     : "₱0";
 
   const formattedOriginalPrice =
@@ -284,7 +697,6 @@ export default function NewProductPage() {
                 Create your listing and preview it before publishing.
               </p>
             </div>
-
           </div>
         </header>
 
@@ -296,6 +708,13 @@ export default function NewProductPage() {
             </span>
 
             <span>{error}</span>
+          </div>
+        )}
+
+        {/* Loading status */}
+        {loading && loadingMessage && (
+          <div className="mb-6 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-600 shadow-sm">
+            {loadingMessage}
           </div>
         )}
 
@@ -344,9 +763,12 @@ export default function NewProductPage() {
                       required
                       value={name}
                       onChange={(event) =>
-                        setName(event.target.value)
+                        setName(
+                          event.target.value
+                        )
                       }
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
+                      disabled={loading}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                       placeholder="Name of T-Shirt"
                     />
                   </div>
@@ -368,9 +790,12 @@ export default function NewProductPage() {
                       required
                       value={brand}
                       onChange={(event) =>
-                        setBrand(event.target.value)
+                        setBrand(
+                          event.target.value
+                        )
                       }
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
+                      disabled={loading}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                       placeholder="UNIQLO"
                     />
                   </div>
@@ -392,9 +817,12 @@ export default function NewProductPage() {
                       required
                       value={category}
                       onChange={(event) =>
-                        setCategory(event.target.value)
+                        setCategory(
+                          event.target.value
+                        )
                       }
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
+                      disabled={loading}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <option value="">
                         Select category
@@ -478,9 +906,12 @@ export default function NewProductPage() {
                         required
                         value={price}
                         onChange={(event) =>
-                          setPrice(event.target.value)
+                          setPrice(
+                            event.target.value
+                          )
                         }
-                        className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 pl-9 pr-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
+                        disabled={loading}
+                        className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 pl-9 pr-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                         placeholder="499"
                       />
                     </div>
@@ -493,7 +924,6 @@ export default function NewProductPage() {
                       className="mb-2 block text-sm font-medium"
                     >
                       Original Price
-
                       <span className="ml-1 text-xs font-normal text-neutral-400">
                         optional
                       </span>
@@ -514,7 +944,8 @@ export default function NewProductPage() {
                             event.target.value
                           )
                         }
-                        className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 pl-9 pr-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
+                        disabled={loading}
+                        className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 pl-9 pr-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                         placeholder="790"
                       />
                     </div>
@@ -557,9 +988,12 @@ export default function NewProductPage() {
                       required
                       value={size}
                       onChange={(event) =>
-                        setSize(event.target.value)
+                        setSize(
+                          event.target.value
+                        )
                       }
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
+                      disabled={loading}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                       placeholder="XL"
                     />
                   </div>
@@ -581,9 +1015,12 @@ export default function NewProductPage() {
                       required
                       value={color}
                       onChange={(event) =>
-                        setColor(event.target.value)
+                        setColor(
+                          event.target.value
+                        )
                       }
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
+                      disabled={loading}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                       placeholder="White"
                     />
                   </div>
@@ -605,7 +1042,8 @@ export default function NewProductPage() {
                           event.target.value
                         )
                       }
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
+                      disabled={loading}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                       placeholder="Good pre-loved condition"
                     />
                   </div>
@@ -643,9 +1081,12 @@ export default function NewProductPage() {
                       id="length"
                       value={length}
                       onChange={(event) =>
-                        setLength(event.target.value)
+                        setLength(
+                          event.target.value
+                        )
                       }
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
+                      disabled={loading}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                       placeholder='29"'
                     />
                   </div>
@@ -663,9 +1104,12 @@ export default function NewProductPage() {
                       id="width"
                       value={width}
                       onChange={(event) =>
-                        setWidth(event.target.value)
+                        setWidth(
+                          event.target.value
+                        )
                       }
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
+                      disabled={loading}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                       placeholder='21"'
                     />
                   </div>
@@ -683,9 +1127,12 @@ export default function NewProductPage() {
                       id="waist"
                       value={waist}
                       onChange={(event) =>
-                        setWaist(event.target.value)
+                        setWaist(
+                          event.target.value
+                        )
                       }
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
+                      disabled={loading}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                       placeholder='27"'
                     />
                   </div>
@@ -715,8 +1162,9 @@ export default function NewProductPage() {
                       event.target.value
                     )
                   }
+                  disabled={loading}
                   rows={5}
-                  className="w-full resize-none rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
+                  className="w-full resize-none rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                   placeholder="Additional information about the product..."
                 />
               </section>
@@ -733,7 +1181,7 @@ export default function NewProductPage() {
                   </h2>
 
                   <p className="mt-1 text-sm text-neutral-500">
-                    The first photo becomes the main product image.
+                    Photos are automatically resized and converted to WebP before uploading.
                   </p>
                 </div>
 
@@ -742,9 +1190,14 @@ export default function NewProductPage() {
                   type="file"
                   accept="image/*"
                   multiple
-                  required={images.length === 0}
-                  onChange={handleImagesChange}
+                  required={
+                    images.length === 0
+                  }
+                  onChange={
+                    handleImagesChange
+                  }
                   className="sr-only"
+                  disabled={loading}
                 />
 
                 {images.length === 0 && (
@@ -783,8 +1236,11 @@ export default function NewProductPage() {
 
                       <button
                         type="button"
-                        onClick={clearImages}
-                        className="text-xs font-medium text-neutral-500 underline underline-offset-4 hover:text-black"
+                        onClick={
+                          clearImages
+                        }
+                        disabled={loading}
+                        className="text-xs font-medium text-neutral-500 underline underline-offset-4 hover:text-black disabled:opacity-50"
                       >
                         Clear all
                       </button>
@@ -792,18 +1248,24 @@ export default function NewProductPage() {
 
                     <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
                       {imagePreviews.map(
-                        (image, index) => (
+                        (
+                          image,
+                          index
+                        ) => (
                           <div
                             key={`${image.file.name}-${index}`}
                             className="group relative aspect-square overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100"
                           >
                             <img
                               src={image.url}
-                              alt={image.file.name}
+                              alt={
+                                image.file.name
+                              }
                               className="h-full w-full object-cover"
                             />
 
-                            {index === 0 && (
+                            {index ===
+                              0 && (
                               <div className="absolute left-2 top-2 rounded-md bg-black px-2 py-1 text-[9px] font-semibold text-white">
                                 MAIN
                               </div>
@@ -812,9 +1274,14 @@ export default function NewProductPage() {
                             <button
                               type="button"
                               onClick={() =>
-                                removeImage(index)
+                                removeImage(
+                                  index
+                                )
                               }
-                              className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/80 text-sm font-medium text-white opacity-100 transition hover:bg-black"
+                              disabled={
+                                loading
+                              }
+                              className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/80 text-sm font-medium text-white opacity-100 transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
                               aria-label={`Remove ${image.file.name}`}
                             >
                               ×
@@ -839,7 +1306,7 @@ export default function NewProductPage() {
                     </div>
 
                     <p className="mt-3 text-xs text-neutral-400">
-                      Select more photos anytime. New photos will be added to your existing selection.
+                      Select more photos anytime. Photos will be optimized automatically when you publish.
                     </p>
                   </div>
                 )}
@@ -850,7 +1317,9 @@ export default function NewProductPage() {
                 <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
                   <button
                     type="button"
-                    onClick={() => router.back()}
+                    onClick={() =>
+                      router.back()
+                    }
                     disabled={loading}
                     className="h-12 w-full rounded-xl px-5 text-sm font-medium text-neutral-500 transition hover:bg-neutral-100 hover:text-black disabled:opacity-50 sm:w-auto"
                   >
@@ -863,7 +1332,8 @@ export default function NewProductPage() {
                     className="h-12 w-full rounded-xl bg-black px-7 text-sm font-semibold !text-white transition hover:bg-neutral-800 hover:!text-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                   >
                     {loading
-                      ? "Saving Product..."
+                      ? loadingMessage ||
+                        "Saving..."
                       : "Add Product"}
                   </button>
                 </div>
@@ -893,9 +1363,13 @@ export default function NewProductPage() {
 
               {/* Main Image */}
               <div className="relative aspect-[4/5] bg-neutral-100">
-                {imagePreviews.length > 0 ? (
+                {imagePreviews.length >
+                0 ? (
                   <img
-                    src={imagePreviews[0].url}
+                    src={
+                      imagePreviews[0]
+                        .url
+                    }
                     alt={displayName}
                     className="h-full w-full object-cover"
                   />
@@ -921,10 +1395,14 @@ export default function NewProductPage() {
               </div>
 
               {/* Thumbnail Images */}
-              {imagePreviews.length > 1 && (
+              {imagePreviews.length >
+                1 && (
                 <div className="flex gap-2 overflow-x-auto border-b border-neutral-100 p-3">
                   {imagePreviews.map(
-                    (image, index) => (
+                    (
+                      image,
+                      index
+                    ) => (
                       <div
                         key={`${image.file.name}-thumb-${index}`}
                         className={`h-16 w-16 flex-none overflow-hidden rounded-lg border ${
@@ -965,7 +1443,9 @@ export default function NewProductPage() {
 
                   {formattedOriginalPrice && (
                     <span className="text-sm text-neutral-400 line-through">
-                      {formattedOriginalPrice}
+                      {
+                        formattedOriginalPrice
+                      }
                     </span>
                   )}
                 </div>
@@ -1002,7 +1482,9 @@ export default function NewProductPage() {
                   </p>
                 </div>
 
-                {(length || width || waist) && (
+                {(length ||
+                  width ||
+                  waist) && (
                   <div className="mt-5">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
                       Measurements
@@ -1011,19 +1493,22 @@ export default function NewProductPage() {
                     <div className="mt-2 flex flex-wrap gap-2">
                       {length && (
                         <span className="rounded-lg bg-neutral-100 px-3 py-2 text-xs font-medium">
-                          Length {length}
+                          Length{" "}
+                          {length}
                         </span>
                       )}
 
                       {width && (
                         <span className="rounded-lg bg-neutral-100 px-3 py-2 text-xs font-medium">
-                          Width {width}
+                          Width{" "}
+                          {width}
                         </span>
                       )}
 
                       {waist && (
                         <span className="rounded-lg bg-neutral-100 px-3 py-2 text-xs font-medium">
-                          Waist {waist}
+                          Waist{" "}
+                          {waist}
                         </span>
                       )}
                     </div>
@@ -1072,7 +1557,9 @@ export default function NewProductPage() {
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => router.back()}
+                  onClick={() =>
+                    router.back()
+                  }
                   disabled={loading}
                   className="h-12 flex-1 rounded-xl px-5 text-sm font-medium text-neutral-500 transition hover:bg-neutral-100 hover:text-black disabled:opacity-50"
                 >
@@ -1093,7 +1580,8 @@ export default function NewProductPage() {
                   className="h-12 flex-[1.5] rounded-xl bg-black px-6 text-sm font-semibold !text-white transition hover:bg-neutral-800 hover:!text-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {loading
-                    ? "Saving..."
+                    ? loadingMessage ||
+                      "Saving..."
                     : "Add Product"}
                 </button>
               </div>
