@@ -1,11 +1,12 @@
-
 import Link from "next/link";
+import { unstable_noStore as noStore } from "next/cache";
 
 import ProductCarousel from "@/components/ProductCarousel";
-
 import { getProducts } from "@/lib/products";
 
 export default async function HomePage() {
+  noStore();
+
   const products = await getProducts();
   const latestProducts = products.slice(0, 10);
 
@@ -23,7 +24,6 @@ export default async function HomePage() {
               <h1 className="text-[16vw] font-bold leading-[0.78] tracking-[-0.07em] sm:text-[12vw] md:text-[10vw] lg:text-[9rem]">
                 RACK&apos;D
                 <br />
-                {/* <span className="text-neutral-300">NVL</span> */}
               </h1>
 
               <div className="mt-6 flex flex-col items-center gap-4">
@@ -179,7 +179,6 @@ export default async function HomePage() {
                   <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-400 transition-colors duration-300 group-hover:text-white/50">
                     Category
                   </span>
-
                 </div>
 
                 {/* Bottom */}
@@ -203,7 +202,6 @@ export default async function HomePage() {
               className="flex items-center justify-between border-t border-neutral-200 pt-4 text-sm font-medium text-black transition-colors hover:text-neutral-500"
             >
               View all products
-
               <span>→</span>
             </Link>
           </div>
@@ -216,7 +214,7 @@ export default async function HomePage() {
           <div className="grid gap-7 md:grid-cols-[1.3fr_1fr] md:items-end">
             <div>
               <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-neutral-400">
-                About rack'd
+                About rack&apos;d
               </p>
 
               <h2 className="mt-4 text-4xl font-bold leading-[0.95] tracking-[-0.04em] sm:text-5xl md:text-7xl">
@@ -224,13 +222,15 @@ export default async function HomePage() {
                 <br />
                 shouldn&apos;t cost
                 <br />
-                <span className="text-neutral-300">a fortune.</span>
+                <span className="text-neutral-300">
+                  a fortune.
+                </span>
               </h2>
             </div>
 
             <div className="max-w-md md:pb-1">
               <p className="text-sm leading-7 text-neutral-500 md:text-base">
-                rack'd brings together branded clothing worth wearing
+                rack&apos;d brings together branded clothing worth wearing
                 again. Every piece is selected with condition, style and value
                 in mind.
               </p>
