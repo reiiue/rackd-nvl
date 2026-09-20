@@ -180,9 +180,6 @@ export default async function HomePage() {
                     Category
                   </span>
 
-                  <span className="text-lg text-neutral-400 transition-all duration-300 group-hover:-translate-y-1 group-hover:translate-x-1 group-hover:text-white">
-                    ↗
-                  </span>
                 </div>
 
                 {/* Bottom */}
