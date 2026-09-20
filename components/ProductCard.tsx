@@ -76,7 +76,6 @@ export default function ProductCard({
             src={image}
             alt={`${product.name} photo ${index + 1}`}
             fill
-            unoptimized
             priority={index === 0}
             className={`object-cover transition-opacity duration-300 ${
               activeImage === index

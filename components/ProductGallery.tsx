@@ -59,7 +59,6 @@ export default function ProductGallery({
               fill
               priority
               loading="eager"
-              unoptimized
               className={`object-cover transition duration-500 group-hover:scale-105 ${
                 isSold ? "opacity-60" : ""
               }`}
@@ -100,7 +99,6 @@ export default function ProductGallery({
                   src={image}
                   alt={`${name} photo ${index + 1}`}
                   fill
-                  unoptimized
                   className="object-cover"
                   sizes="120px"
                 />
@@ -137,7 +135,6 @@ export default function ProductGallery({
                 src={selectedImage}
                 alt={name}
                 fill
-                unoptimized
                 className="object-contain"
                 sizes="100vw"
               />
