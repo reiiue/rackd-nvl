@@ -26,17 +26,36 @@ export const metadata: Metadata = {
 
   openGraph: {
     title: "rackd.nvl — Affordable Branded Clothing",
+
     description:
       "Curated branded clothing at reasonable prices.",
-    type: "website",
+
+    url: "https://rackd-nvl.vercel.app",
+
     siteName: "rackd.nvl",
+
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "rackd.nvl — Affordable Branded Clothing",
+      },
+    ],
+
+    locale: "en_PH",
+    type: "website",
   },
 
   twitter: {
     card: "summary_large_image",
+
     title: "rackd.nvl — Affordable Branded Clothing",
+
     description:
       "Curated branded clothing at reasonable prices.",
+
+    images: ["/og-image.jpg"],
   },
 
   robots: {
