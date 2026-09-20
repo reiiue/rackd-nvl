@@ -1,4 +1,3 @@
-
 "use client";
 
 import Image from "next/image";
@@ -19,7 +18,9 @@ export default function ProductCard({
   const productImages =
     product.images?.length
       ? product.images
-      : [product.image];
+      : product.image
+        ? [product.image]
+        : [];
 
   const [activeImage, setActiveImage] = useState(0);
 
@@ -36,7 +37,9 @@ export default function ProductCard({
   function handleMouseMove(
     event: React.MouseEvent<HTMLDivElement>
   ) {
-    if (productImages.length <= 1) return;
+    if (productImages.length <= 1) {
+      return;
+    }
 
     const rect =
       event.currentTarget.getBoundingClientRect();
@@ -62,6 +65,7 @@ export default function ProductCard({
       href={`/product/${product.id}`}
       className="group block"
     >
+      {/* Product Image */}
       <div
         className="relative aspect-[4/5] overflow-hidden bg-neutral-100"
         onMouseEnter={handleMouseEnter}
@@ -71,39 +75,41 @@ export default function ProductCard({
         {productImages.map(
           (image, index) => (
             <Image
-              key={image}
+              key={`${image}-${index}`}
               src={image}
               alt={`${product.name} photo ${index + 1}`}
               fill
               unoptimized
               priority={index === 0}
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className={`object-cover transition-opacity duration-300 ${
                 activeImage === index
                   ? "opacity-100"
                   : "opacity-0"
-              } ${
-                isSold
-                  ? "opacity-60"
-                  : ""
               }`}
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             />
           )
         )}
 
+        {/* Sold Overlay */}
         {isSold && (
-          <div className="absolute left-3 top-3 bg-black px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-white">
-            Sold
-          </div>
+          <>
+            <div className="absolute inset-0 bg-white/35" />
+
+            <div className="absolute left-3 top-3 bg-black px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-white">
+              Sold
+            </div>
+          </>
         )}
 
+        {/* Image Indicators */}
         {productImages.length > 1 && (
           <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
             {productImages.map(
               (_, index) => (
                 <span
                   key={index}
-                  className={`h-1.5 rounded-full transition-all ${
+                  className={`h-1.5 rounded-full transition-all duration-200 ${
                     activeImage === index
                       ? "w-4 bg-black"
                       : "w-1.5 bg-white/80"
@@ -115,6 +121,7 @@ export default function ProductCard({
         )}
       </div>
 
+      {/* Product Information */}
       <div className="pt-4">
         <p className="text-xs uppercase tracking-wide text-neutral-400">
           {product.brand}
@@ -129,17 +136,15 @@ export default function ProductCard({
             className={`text-sm font-medium ${
               isSold
                 ? "text-neutral-400"
-                : ""
+                : "text-black"
             }`}
           >
-            ₱
-            {product.price.toLocaleString()}
+            ₱{product.price.toLocaleString()}
           </p>
 
           {product.originalPrice && (
             <p className="text-xs text-neutral-400 line-through">
-              ₱
-              {product.originalPrice.toLocaleString()}
+              ₱{product.originalPrice.toLocaleString()}
             </p>
           )}
         </div>
