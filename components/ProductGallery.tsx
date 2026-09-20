@@ -17,13 +17,22 @@ export default function ProductGallery({
   name,
   isSold,
 }: ProductGalleryProps) {
-  const [selectedImage, setSelectedImage] = useState(images[0]);
+  const [selectedImage, setSelectedImage] = useState(
+    images[0]
+  );
+
   const [isZoomed, setIsZoomed] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (images.length > 0) {
+      setSelectedImage(images[0]);
+    }
+  }, [images]);
 
   useEffect(() => {
     if (!isZoomed) {
@@ -42,6 +51,12 @@ export default function ProductGallery({
     setIsZoomed(false);
   }
 
+  if (!images.length) {
+    return (
+      <div className="aspect-[4/5] bg-neutral-100" />
+    );
+  }
+
   return (
     <>
       <div>
@@ -57,6 +72,7 @@ export default function ProductGallery({
               src={selectedImage}
               alt={name}
               fill
+              unoptimized
               priority
               loading="eager"
               className={`object-cover transition duration-500 group-hover:scale-105 ${
@@ -99,6 +115,7 @@ export default function ProductGallery({
                   src={image}
                   alt={`${name} photo ${index + 1}`}
                   fill
+                  unoptimized
                   className="object-cover"
                   sizes="120px"
                 />
@@ -129,12 +146,15 @@ export default function ProductGallery({
             {/* Zoomed Image */}
             <div
               className="relative h-[94vh] w-full max-w-6xl"
-              onClick={(event) => event.stopPropagation()}
+              onClick={(event) =>
+                event.stopPropagation()
+              }
             >
               <Image
                 src={selectedImage}
                 alt={name}
                 fill
+                unoptimized
                 className="object-contain"
                 sizes="100vw"
               />

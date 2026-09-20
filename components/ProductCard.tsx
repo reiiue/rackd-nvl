@@ -36,9 +36,7 @@ export default function ProductCard({
   function handleMouseMove(
     event: React.MouseEvent<HTMLDivElement>
   ) {
-    if (productImages.length <= 1) {
-      return;
-    }
+    if (productImages.length <= 1) return;
 
     const rect =
       event.currentTarget.getBoundingClientRect();
@@ -70,23 +68,28 @@ export default function ProductCard({
         onMouseLeave={handleMouseLeave}
         onMouseMove={handleMouseMove}
       >
-        {productImages.map((image, index) => (
-          <Image
-            key={image}
-            src={image}
-            alt={`${product.name} photo ${index + 1}`}
-            fill
-            priority={index === 0}
-            className={`object-cover transition-opacity duration-300 ${
-              activeImage === index
-                ? "opacity-100"
-                : "opacity-0"
-            } ${
-              isSold ? "opacity-60" : ""
-            }`}
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          />
-        ))}
+        {productImages.map(
+          (image, index) => (
+            <Image
+              key={image}
+              src={image}
+              alt={`${product.name} photo ${index + 1}`}
+              fill
+              unoptimized
+              priority={index === 0}
+              className={`object-cover transition-opacity duration-300 ${
+                activeImage === index
+                  ? "opacity-100"
+                  : "opacity-0"
+              } ${
+                isSold
+                  ? "opacity-60"
+                  : ""
+              }`}
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            />
+          )
+        )}
 
         {isSold && (
           <div className="absolute left-3 top-3 bg-black px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-white">
@@ -94,19 +97,20 @@ export default function ProductCard({
           </div>
         )}
 
-        {/* Image indicators */}
         {productImages.length > 1 && (
           <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-            {productImages.map((_, index) => (
-              <span
-                key={index}
-                className={`h-1.5 w-1.5 rounded-full transition-all ${
-                  activeImage === index
-                    ? "w-4 bg-black"
-                    : "bg-white/80"
-                }`}
-              />
-            ))}
+            {productImages.map(
+              (_, index) => (
+                <span
+                  key={index}
+                  className={`h-1.5 rounded-full transition-all ${
+                    activeImage === index
+                      ? "w-4 bg-black"
+                      : "w-1.5 bg-white/80"
+                  }`}
+                />
+              )
+            )}
           </div>
         )}
       </div>
@@ -128,7 +132,8 @@ export default function ProductCard({
                 : ""
             }`}
           >
-            ₱{product.price.toLocaleString()}
+            ₱
+            {product.price.toLocaleString()}
           </p>
 
           {product.originalPrice && (
