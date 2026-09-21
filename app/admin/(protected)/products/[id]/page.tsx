@@ -10,6 +10,7 @@ import {
   useParams,
   useRouter,
 } from "next/navigation";
+
 import { supabase } from "@/lib/supabase";
 
 type ProductImage = {
@@ -34,9 +35,21 @@ type ProductForm = {
   status: "available" | "sold";
 };
 
-async function optimizeImage(
-  file: File
-): Promise<File> {
+const categoryOptions = [
+  "T-Shirts",
+  "Shirts",
+  "Polo",
+  "Sweatshirts",
+  "Hoodies",
+  "Jackets",
+  "Jeans",
+  "Pants",
+  "Shorts",
+  "Sportswear",
+  "Other",
+];
+
+async function optimizeImage(file: File): Promise<File> {
   let inputFile = file;
 
   const isHeic =
@@ -50,12 +63,11 @@ async function optimizeImage(
         await import("heic2any")
       ).default;
 
-      const convertedBlob =
-        await heic2any({
-          blob: file,
-          toType: "image/jpeg",
-          quality: 0.9,
-        });
+      const convertedBlob = await heic2any({
+        blob: file,
+        toType: "image/jpeg",
+        quality: 0.9,
+      });
 
       const jpegBlob = Array.isArray(
         convertedBlob
@@ -86,156 +98,130 @@ async function optimizeImage(
     }
   }
 
-  return new Promise(
-    (resolve, reject) => {
-      const image =
-        new window.Image();
+  return new Promise((resolve, reject) => {
+    const image = new window.Image();
 
-      const objectUrl =
-        URL.createObjectURL(
-          inputFile
-        );
+    const objectUrl =
+      URL.createObjectURL(inputFile);
 
-      image.onload = () => {
-        try {
-          const maxSize = 1600;
+    image.onload = () => {
+      try {
+        const maxSize = 1600;
 
-          let width =
-            image.naturalWidth;
-          let height =
-            image.naturalHeight;
+        let width = image.naturalWidth;
+        let height = image.naturalHeight;
 
-          if (
-            width > maxSize ||
-            height > maxSize
-          ) {
-            const scale = Math.min(
-              maxSize / width,
-              maxSize / height
-            );
-
-            width = Math.round(
-              width * scale
-            );
-
-            height = Math.round(
-              height * scale
-            );
-          }
-
-          const canvas =
-            document.createElement(
-              "canvas"
-            );
-
-          canvas.width = width;
-          canvas.height = height;
-
-          const context =
-            canvas.getContext(
-              "2d"
-            );
-
-          if (!context) {
-            URL.revokeObjectURL(
-              objectUrl
-            );
-
-            reject(
-              new Error(
-                `Could not process image: ${file.name}`
-              )
-            );
-
-            return;
-          }
-
-          context.imageSmoothingEnabled =
-            true;
-
-          context.imageSmoothingQuality =
-            "high";
-
-          context.drawImage(
-            image,
-            0,
-            0,
-            width,
-            height
+        if (
+          width > maxSize ||
+          height > maxSize
+        ) {
+          const scale = Math.min(
+            maxSize / width,
+            maxSize / height
           );
 
-          canvas.toBlob(
-            (blob) => {
-              URL.revokeObjectURL(
-                objectUrl
-              );
-
-              if (!blob) {
-                reject(
-                  new Error(
-                    `Could not convert image: ${file.name}`
-                  )
-                );
-
-                return;
-              }
-
-              const baseName =
-                file.name.replace(
-                  /\.[^/.]+$/,
-                  ""
-                );
-
-              const optimizedFile =
-                new File(
-                  [blob],
-                  `${baseName}.webp`,
-                  {
-                    type: "image/webp",
-                    lastModified:
-                      Date.now(),
-                  }
-                );
-
-              resolve(
-                optimizedFile
-              );
-            },
-            "image/webp",
-            0.82
-          );
-        } catch (error) {
-          URL.revokeObjectURL(
-            objectUrl
+          width = Math.round(
+            width * scale
           );
 
-          reject(error);
+          height = Math.round(
+            height * scale
+          );
         }
-      };
 
-      image.onerror = () => {
-        URL.revokeObjectURL(
-          objectUrl
+        const canvas =
+          document.createElement("canvas");
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const context =
+          canvas.getContext("2d");
+
+        if (!context) {
+          URL.revokeObjectURL(objectUrl);
+
+          reject(
+            new Error(
+              `Could not process image: ${file.name}`
+            )
+          );
+
+          return;
+        }
+
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+
+        context.drawImage(
+          image,
+          0,
+          0,
+          width,
+          height
         );
 
-        reject(
-          new Error(
-            `Could not read image: ${file.name}.`
-          )
-        );
-      };
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(objectUrl);
 
-      image.src = objectUrl;
-    }
-  );
+            if (!blob) {
+              reject(
+                new Error(
+                  `Could not convert image: ${file.name}`
+                )
+              );
+
+              return;
+            }
+
+            const baseName =
+              file.name.replace(
+                /\.[^/.]+$/,
+                ""
+              );
+
+            const optimizedFile =
+              new File(
+                [blob],
+                `${baseName}.webp`,
+                {
+                  type: "image/webp",
+                  lastModified:
+                    Date.now(),
+                }
+              );
+
+            resolve(optimizedFile);
+          },
+          "image/webp",
+          0.82
+        );
+      } catch (error) {
+        URL.revokeObjectURL(objectUrl);
+        reject(error);
+      }
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      reject(
+        new Error(
+          `Could not read image: ${file.name}. Please use JPG, PNG, WEBP, HEIC, or HEIF.`
+        )
+      );
+    };
+
+    image.src = objectUrl;
+  });
 }
 
 export default function EditProductPage() {
-  const router = useRouter();
   const params = useParams();
+  const router = useRouter();
 
-  const productId =
-    params.id as string;
+  const productId = String(params.id);
 
   const [form, setForm] =
     useState<ProductForm>({
@@ -254,13 +240,9 @@ export default function EditProductPage() {
       status: "available",
     });
 
-  const [images, setImages] =
-    useState<ProductImage[]>(
-      []
-    );
-
-  const [mainImage, setMainImage] =
-    useState("");
+  const [images, setImages] = useState<
+    ProductImage[]
+  >([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -268,10 +250,7 @@ export default function EditProductPage() {
   const [saving, setSaving] =
     useState(false);
 
-  const [deleting, setDeleting] =
-    useState(false);
-
-  const [imageLoading, setImageLoading] =
+  const [uploading, setUploading] =
     useState(false);
 
   const [
@@ -282,173 +261,145 @@ export default function EditProductPage() {
   const [error, setError] =
     useState("");
 
-  const [imageError, setImageError] =
-    useState("");
-
   const [success, setSuccess] =
     useState("");
 
-  const [
-    deleteConfirm,
-    setDeleteConfirm,
-  ] = useState(false);
+  const [productExists, setProductExists] =
+    useState(false);
 
   useEffect(() => {
-    async function loadProduct() {
-      setLoading(true);
-      setError("");
+    if (!productId) return;
 
-      try {
-        const {
-          data: product,
-          error: productError,
-        } = await supabase
-          .from("products")
-          .select(`
-            id,
-            name,
-            brand,
-            price,
-            original_price,
-            size,
-            color,
-            condition,
-            category,
-            image,
-            measurements,
-            description,
-            status
-          `)
-          .eq("id", productId)
-          .single();
-
-        if (productError) {
-          throw productError;
-        }
-
-        if (!product) {
-          setError(
-            "Product not found."
-          );
-          return;
-        }
-
-        const measurements =
-          product.measurements ?? {};
-
-        setForm({
-          name: product.name ?? "",
-          brand: product.brand ?? "",
-          price:
-            product.price !==
-              null &&
-            product.price !==
-              undefined
-              ? String(
-                  product.price
-                )
-              : "",
-          originalPrice:
-            product.original_price !==
-              null &&
-            product.original_price !==
-              undefined
-              ? String(
-                  product.original_price
-                )
-              : "",
-          size:
-            product.size ?? "",
-          color:
-            product.color ?? "",
-          condition:
-            product.condition ??
-            "",
-          category:
-            product.category ??
-            "",
-          length:
-            measurements.length ??
-            "",
-          width:
-            measurements.width ??
-            "",
-          waist:
-            measurements.waist ??
-            "",
-          description:
-            product.description ??
-            "",
-          status:
-            product.status ===
-            "sold"
-              ? "sold"
-              : "available",
-        });
-
-        setMainImage(
-          product.image ?? ""
-        );
-
-        const {
-          data: productImages,
-          error: imagesError,
-        } = await supabase
-          .from("product_images")
-          .select(`
-            id,
-            image_url,
-            sort_order
-          `)
-          .eq(
-            "product_id",
-            productId
-          )
-          .order("sort_order", {
-            ascending: true,
-          });
-
-        if (imagesError) {
-          throw imagesError;
-        }
-
-        setImages(
-          productImages ?? []
-        );
-      } catch (err) {
-        console.error(
-          "Error loading product:",
-          err
-        );
-
-        setError(
-          "Unable to load this product."
-        );
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    if (productId) {
-      loadProduct();
-    }
+    loadProduct();
   }, [productId]);
 
-  function handleChange(
-    event:
-      | React.ChangeEvent<HTMLInputElement>
-      | React.ChangeEvent<HTMLTextAreaElement>
-      | React.ChangeEvent<HTMLSelectElement>
-  ) {
-    const {
-      name,
-      value,
-    } = event.target;
+  async function loadProduct() {
+    setLoading(true);
+    setError("");
 
+    try {
+      const {
+        data: product,
+        error: productError,
+      } = await supabase
+        .from("products")
+        .select(`
+          id,
+          name,
+          brand,
+          price,
+          original_price,
+          size,
+          color,
+          condition,
+          category,
+          image,
+          measurements,
+          description,
+          status
+        `)
+        .eq("id", productId)
+        .single();
+
+      if (productError) {
+        throw productError;
+      }
+
+      if (!product) {
+        throw new Error(
+          "Product not found."
+        );
+      }
+
+      const measurements =
+        product.measurements ?? {};
+
+      setForm({
+        name: product.name ?? "",
+        brand: product.brand ?? "",
+        price:
+          product.price !== null &&
+          product.price !== undefined
+            ? String(product.price)
+            : "",
+        originalPrice:
+          product.original_price !==
+            null &&
+          product.original_price !==
+            undefined
+            ? String(product.original_price)
+            : "",
+        size: product.size ?? "",
+        color: product.color ?? "",
+        condition:
+          product.condition ?? "",
+        category:
+          product.category ?? "",
+        length:
+          measurements.length ?? "",
+        width:
+          measurements.width ?? "",
+        waist:
+          measurements.waist ?? "",
+        description:
+          product.description ?? "",
+        status:
+          product.status === "sold"
+            ? "sold"
+            : "available",
+      });
+
+      const {
+        data: productImages,
+        error: imagesError,
+      } = await supabase
+        .from("product_images")
+        .select(`
+          id,
+          image_url,
+          sort_order
+        `)
+        .eq("product_id", productId)
+        .order("sort_order", {
+          ascending: true,
+        });
+
+      if (imagesError) {
+        throw imagesError;
+      }
+
+      setImages(
+        productImages ?? []
+      );
+
+      setProductExists(true);
+    } catch (err) {
+      console.error(
+        "Error loading product:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not load product."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function updateField(
+    field: keyof ProductForm,
+    value: string
+  ) {
     setForm((current) => ({
       ...current,
-      [name]: value,
+      [field]: value,
     }));
+
+    setSuccess("");
+    setError("");
   }
 
   async function handleSave(
@@ -456,18 +407,57 @@ export default function EditProductPage() {
   ) {
     event.preventDefault();
 
+    if (!form.name.trim()) {
+      setError(
+        "Product name is required."
+      );
+      return;
+    }
+
+    if (!form.brand.trim()) {
+      setError(
+        "Brand is required."
+      );
+      return;
+    }
+
+    if (!form.price.trim()) {
+      setError(
+        "Selling price is required."
+      );
+      return;
+    }
+
+    if (
+      Number.isNaN(Number(form.price))
+    ) {
+      setError(
+        "Selling price must be a valid number."
+      );
+      return;
+    }
+
+    if (
+      form.originalPrice.trim() &&
+      Number.isNaN(
+        Number(form.originalPrice)
+      )
+    ) {
+      setError(
+        "Original price must be a valid number."
+      );
+      return;
+    }
+
     setSaving(true);
     setError("");
     setSuccess("");
 
     try {
       const measurements = {
-        length:
-          form.length.trim(),
-        width:
-          form.width.trim(),
-        waist:
-          form.waist.trim(),
+        length: form.length.trim(),
+        width: form.width.trim(),
+        waist: form.waist.trim(),
       };
 
       const {
@@ -477,19 +467,15 @@ export default function EditProductPage() {
         .update({
           name: form.name.trim(),
           brand: form.brand.trim(),
-          price: Number(
-            form.price
-          ),
+          price: Number(form.price),
           original_price:
             form.originalPrice.trim()
               ? Number(
                   form.originalPrice
                 )
               : null,
-          size:
-            form.size.trim(),
-          color:
-            form.color.trim(),
+          size: form.size.trim(),
+          color: form.color.trim(),
           condition:
             form.condition.trim(),
           category:
@@ -498,13 +484,9 @@ export default function EditProductPage() {
           description:
             form.description.trim() ||
             null,
-          status:
-            form.status,
+          status: form.status,
         })
-        .eq(
-          "id",
-          productId
-        );
+        .eq("id", productId);
 
       if (updateError) {
         throw updateError;
@@ -515,14 +497,14 @@ export default function EditProductPage() {
       );
     } catch (err) {
       console.error(
-        "Save product error:",
+        "Error saving product:",
         err
       );
 
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to update the product."
+          : "Could not update product."
       );
     } finally {
       setSaving(false);
@@ -540,79 +522,63 @@ export default function EditProductPage() {
       return;
     }
 
-    setImageError("");
+    setUploading(true);
+    setError("");
     setSuccess("");
-    setImageLoading(true);
 
-    const uploadedStoragePaths: string[] =
-      [];
-
-    const insertedImageIds: number[] =
-      [];
+    const uploadedPaths: string[] = [];
+    const insertedImageIds: number[] = [];
 
     try {
       setImageProcessingStatus(
         "Optimizing photos..."
       );
 
-      const optimizedFiles: File[] =
-        [];
+      const optimizedFiles: File[] = [];
 
-      for (
-        let index = 0;
-        index < files.length;
-        index++
-      ) {
-        setImageProcessingStatus(
-          `Optimizing photo ${
-            index + 1
-          } of ${files.length}...`
-        );
+      for (const file of files) {
+        const optimized =
+          await optimizeImage(file);
 
-        const optimizedFile =
-          await optimizeImage(
-            files[index]
-          );
-
-        optimizedFiles.push(
-          optimizedFile
-        );
+        optimizedFiles.push(optimized);
       }
 
       setImageProcessingStatus(
         "Uploading photos..."
       );
 
-      const newImages: ProductImage[] =
-        [];
+      let nextSortOrder =
+        images.length > 0
+          ? Math.max(
+              ...images.map(
+                (image) =>
+                  image.sort_order
+              )
+            ) + 1
+          : 0;
 
-      const startingSortOrder =
-        images.length;
+      const newlyUploadedImages: ProductImage[] =
+        [];
 
       for (
         let index = 0;
-        index <
-        optimizedFiles.length;
+        index < optimizedFiles.length;
         index++
       ) {
-        const optimizedFile =
+        const file =
           optimizedFiles[index];
 
-        const uniqueFileName =
-          `${crypto.randomUUID()}.webp`;
+        const uniqueFileName = `${crypto.randomUUID()}.webp`;
 
-        const filePath =
-          `${productId}/${uniqueFileName}`;
+        const filePath = `${productId}/${uniqueFileName}`;
 
         const {
           error: uploadError,
         } = await supabase.storage
-          .from(
-            "product-images"
-          )
+          .from("product-images")
           .upload(
             filePath,
-            optimizedFile,
+            file,
             {
               cacheControl:
                 "31536000",
@@ -626,20 +592,15 @@ export default function EditProductPage() {
           throw uploadError;
         }
 
-        uploadedStoragePaths.push(
+        uploadedPaths.push(
           filePath
         );
 
         const {
           data: publicUrlData,
-        } =
-          supabase.storage
-            .from(
-              "product-images"
-            )
-            .getPublicUrl(
-              filePath
-            );
+        } = supabase.storage
+          .from("product-images")
+          .getPublicUrl(filePath);
 
         const imageUrl =
           publicUrlData.publicUrl;
@@ -651,13 +612,10 @@ export default function EditProductPage() {
         } = await supabase
           .from("product_images")
           .insert({
-            product_id:
-              productId,
-            image_url:
-              imageUrl,
+            product_id: productId,
+            image_url: imageUrl,
             sort_order:
-              startingSortOrder +
-              index,
+              nextSortOrder,
           })
           .select(
             "id, image_url, sort_order"
@@ -668,31 +626,33 @@ export default function EditProductPage() {
           throw insertImageError;
         }
 
-        if (!insertedImage) {
-          throw new Error(
-            "Unable to save uploaded product image."
-          );
-        }
-
         insertedImageIds.push(
           insertedImage.id
         );
 
-        newImages.push(
+        newlyUploadedImages.push(
           insertedImage
         );
+
+        nextSortOrder++;
       }
 
-      if (
-        !mainImage &&
-        newImages.length > 0
-      ) {
-        setImageProcessingStatus(
-          "Saving product photos..."
-        );
+      setImageProcessingStatus(
+        "Saving product photos..."
+      );
 
+      const updatedImages = [
+        ...images,
+        ...newlyUploadedImages,
+      ];
+
+      if (
+        images.length === 0 &&
+        newlyUploadedImages.length >
+          0
+      ) {
         const firstImage =
-          newImages[0];
+          newlyUploadedImages[0];
 
         const {
           error: mainImageError,
@@ -702,37 +662,25 @@ export default function EditProductPage() {
             image:
               firstImage.image_url,
           })
-          .eq(
-            "id",
-            productId
-          );
+          .eq("id", productId);
 
         if (mainImageError) {
           throw mainImageError;
         }
-
-        setMainImage(
-          firstImage.image_url
-        );
       }
 
-      setImages((current) => [
-        ...current,
-        ...newImages,
-      ]);
+      setImages(updatedImages);
 
       setSuccess(
-        newImages.length === 1
-          ? "Photo added successfully."
-          : `${newImages.length} photos added successfully.`
-      );
-
-      setImageProcessingStatus(
-        ""
+        `${files.length} photo${
+          files.length === 1
+            ? ""
+            : "s"
+        } added successfully.`
       );
     } catch (err) {
       console.error(
-        "Add images error:",
+        "Error uploading images:",
         err
       );
 
@@ -750,86 +698,83 @@ export default function EditProductPage() {
       }
 
       if (
-        uploadedStoragePaths.length >
-        0
+        uploadedPaths.length > 0
       ) {
         await supabase.storage
-          .from(
-            "product-images"
-          )
+          .from("product-images")
           .remove(
-            uploadedStoragePaths
+            uploadedPaths
           );
       }
 
-      setImageError(
+      setError(
         err instanceof Error
           ? err.message
-          : "Unable to add the selected photos."
-      );
-
-      setImageProcessingStatus(
-        ""
+          : "Could not upload photos."
       );
     } finally {
-      setImageLoading(false);
+      setUploading(false);
       setImageProcessingStatus("");
 
       event.target.value = "";
     }
   }
 
+  function getStoragePathFromUrl(
+    url: string
+  ) {
+    const marker =
+      "/storage/v1/object/public/product-images/";
+
+    const index =
+      url.indexOf(marker);
+
+    if (index === -1) {
+      return null;
+    }
+
+    return decodeURIComponent(
+      url.slice(
+        index + marker.length
+      )
+    );
+  }
+
   async function handleDeleteImage(
     image: ProductImage
   ) {
-    if (imageLoading) {
-      return;
-    }
-
     const confirmed =
       window.confirm(
-        "Delete this product photo?"
+        "Delete this photo? This cannot be undone."
       );
 
     if (!confirmed) {
       return;
     }
 
-    setImageError("");
+    setError("");
     setSuccess("");
 
     try {
-      const imageUrl =
-        image.image_url;
-
-      const storagePrefix =
-        "/storage/v1/object/public/product-images/";
-
-      const prefixIndex =
-        imageUrl.indexOf(
-          storagePrefix
+      const storagePath =
+        getStoragePathFromUrl(
+          image.image_url
         );
 
-      if (prefixIndex !== -1) {
-        const filePath =
-          decodeURIComponent(
-            imageUrl.substring(
-              prefixIndex +
-                storagePrefix.length
-            )
-          );
-
+      if (storagePath) {
         const {
-          error:
-            storageDeleteError,
+          error: storageError,
         } = await supabase.storage
-          .from(
-            "product-images"
-          )
-          .remove([filePath]);
+          .from("product-images")
+          .remove([
+            storagePath,
+          ]);
 
-        if (storageDeleteError) {
-          throw storageDeleteError;
+        if (storageError) {
+          console.error(
+            "Storage delete error:",
+            storageError
+          );
         }
       }
 
@@ -838,10 +783,7 @@ export default function EditProductPage() {
       } = await supabase
         .from("product_images")
         .delete()
-        .eq(
-          "id",
-          image.id
-        );
+        .eq("id", image.id);
 
       if (deleteError) {
         throw deleteError;
@@ -853,38 +795,76 @@ export default function EditProductPage() {
             item.id !== image.id
         );
 
-      setImages(
-        remainingImages
-      );
+      const wasMain =
+        images[0]?.id === image.id;
 
-      if (
-        image.image_url ===
-        mainImage
-      ) {
-        const nextMainImage =
-          remainingImages[0]
-            ?.image_url ?? "";
+      if (wasMain) {
+        if (
+          remainingImages.length >
+          0
+        ) {
+          const newMain =
+            remainingImages[0];
 
-        const {
-          error: updateError,
-        } = await supabase
-          .from("products")
-          .update({
-            image:
-              nextMainImage ||
-              null,
-          })
-          .eq(
-            "id",
-            productId
+          await supabase
+            .from("products")
+            .update({
+              image:
+                newMain.image_url,
+            })
+            .eq(
+              "id",
+              productId
+            );
+
+          const reordered =
+            remainingImages.map(
+              (
+                item,
+                index
+              ) => ({
+                ...item,
+                sort_order:
+                  index,
+              })
+            );
+
+          for (
+            const item of reordered
+          ) {
+            await supabase
+              .from(
+                "product_images"
+              )
+              .update({
+                sort_order:
+                  item.sort_order,
+              })
+              .eq(
+                "id",
+                item.id
+              );
+          }
+
+          setImages(
+            reordered
           );
+        } else {
+          await supabase
+            .from("products")
+            .update({
+              image: null,
+            })
+            .eq(
+              "id",
+              productId
+            );
 
-        if (updateError) {
-          throw updateError;
+          setImages([]);
         }
-
-        setMainImage(
-          nextMainImage
+      } else {
+        setImages(
+          remainingImages
         );
       }
 
@@ -893,140 +873,121 @@ export default function EditProductPage() {
       );
     } catch (err) {
       console.error(
-        "Delete image error:",
+        "Error deleting image:",
         err
       );
 
-      setImageError(
+      setError(
         err instanceof Error
           ? err.message
-          : "Unable to delete the photo."
+          : "Could not delete photo."
       );
     }
   }
 
-  async function handleSetMainImage(
+  async function handleSetMain(
     image: ProductImage
   ) {
     if (
-      image.image_url ===
-      mainImage
+      images[0]?.id === image.id
     ) {
       return;
     }
 
-    setImageError("");
+    setError("");
     setSuccess("");
 
     try {
-      const currentImages = [
-        ...images,
-      ];
-
-      const reorderedImages =
-        currentImages
-          .filter(
-            (item) =>
-              item.id !==
-              image.id
-          )
-          .sort(
-            (a, b) =>
-              a.sort_order -
-              b.sort_order
-          );
-
-      const newOrder = [
+      const reordered = [
         image,
-        ...reorderedImages,
-      ];
+        ...images.filter(
+          (item) =>
+            item.id !== image.id
+        ),
+      ].map(
+        (item, index) => ({
+          ...item,
+          sort_order:
+            index,
+        })
+      );
 
       for (
-        let index = 0;
-        index < newOrder.length;
-        index++
+        const item of reordered
       ) {
-        const item =
-          newOrder[index];
-
         const {
-          error:
-            reorderError,
+          error: updateError,
         } = await supabase
           .from("product_images")
           .update({
             sort_order:
-              index,
+              item.sort_order,
           })
           .eq(
             "id",
             item.id
           );
 
-        if (reorderError) {
-          throw reorderError;
+        if (updateError) {
+          throw updateError;
         }
       }
 
       const {
-        error: updateError,
+        error: productError,
       } = await supabase
         .from("products")
         .update({
           image:
             image.image_url,
         })
-        .eq(
-          "id",
-          productId
-        );
+        .eq("id", productId);
 
-      if (updateError) {
-        throw updateError;
+      if (productError) {
+        throw productError;
       }
 
-      setImages(
-        newOrder.map(
-          (
-            item,
-            index
-          ) => ({
-            ...item,
-            sort_order:
-              index,
-          })
-        )
-      );
-
-      setMainImage(
-        image.image_url
-      );
+      setImages(reordered);
 
       setSuccess(
-        "Main photo updated successfully."
+        "Main photo updated."
       );
     } catch (err) {
       console.error(
-        "Set main image error:",
+        "Error setting main image:",
         err
       );
 
-      setImageError(
+      setError(
         err instanceof Error
           ? err.message
-          : "Unable to set the main photo."
+          : "Could not set main photo."
       );
     }
   }
 
   async function handleDeleteProduct() {
-    if (!deleteConfirm) {
-      setDeleteConfirm(true);
+    const confirmed =
+      window.confirm(
+        "Delete this product permanently? This will also delete all of its photos. This action cannot be undone."
+      );
+
+    if (!confirmed) {
       return;
     }
 
-    setDeleting(true);
+    const secondConfirmation =
+      window.confirm(
+        `Delete "${form.name}" permanently?`
+      );
+
+    if (!secondConfirmation) {
+      return;
+    }
+
+    setSaving(true);
     setError("");
+    setSuccess("");
 
     try {
       const {
@@ -1034,13 +995,14 @@ export default function EditProductPage() {
         error:
           storageListError,
       } = await supabase.storage
-        .from(
-          "product-images"
-        )
+        .from("product-images")
         .list(productId);
 
       if (storageListError) {
-        throw storageListError;
+        console.error(
+          "Storage list error:",
+          storageListError
+        );
       }
 
       if (
@@ -1054,16 +1016,16 @@ export default function EditProductPage() {
           );
 
         const {
-          error:
-            storageDeleteError,
+          error: removeError,
         } = await supabase.storage
-          .from(
-            "product-images"
-          )
+          .from("product-images")
           .remove(paths);
 
-        if (storageDeleteError) {
-          throw storageDeleteError;
+        if (removeError) {
+          console.error(
+            "Storage cleanup error:",
+            removeError
+          );
         }
       }
 
@@ -1072,10 +1034,7 @@ export default function EditProductPage() {
       } = await supabase
         .from("products")
         .delete()
-        .eq(
-          "id",
-          productId
-        );
+        .eq("id", productId);
 
       if (deleteError) {
         throw deleteError;
@@ -1084,58 +1043,48 @@ export default function EditProductPage() {
       router.push(
         "/admin/products"
       );
-
       router.refresh();
     } catch (err) {
       console.error(
-        "Delete product error:",
+        "Error deleting product:",
         err
       );
 
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to delete the product."
+          : "Could not delete product."
       );
 
-      setDeleting(false);
-      setDeleteConfirm(false);
+      setSaving(false);
     }
   }
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-neutral-50">
-        <div className="mx-auto max-w-[1500px] px-5 py-10 sm:px-8 lg:px-10">
-          <div className="animate-pulse">
-            <div className="h-4 w-24 rounded bg-neutral-200" />
-
-            <div className="mt-6 h-10 w-64 rounded bg-neutral-200" />
-
-            <div className="mt-3 h-4 w-96 max-w-full rounded bg-neutral-200" />
-
-            <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_460px]">
-              <div className="space-y-5">
-                <div className="h-64 rounded-2xl bg-white" />
-                <div className="h-52 rounded-2xl bg-white" />
-                <div className="h-52 rounded-2xl bg-white" />
-              </div>
-
-              <div className="aspect-[4/5] rounded-2xl bg-white" />
-            </div>
+      <main className="min-h-screen bg-neutral-50 text-black">
+        <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-neutral-500">
+              Loading product...
+            </p>
           </div>
         </div>
       </main>
     );
   }
 
-  if (error && !form.name) {
+  if (
+    !productExists &&
+    !loading
+  ) {
     return (
-      <main className="min-h-screen bg-neutral-50">
-        <div className="mx-auto max-w-[1500px] px-5 py-16 sm:px-8 lg:px-10">
-          <div className="rounded-2xl border border-red-200 bg-white p-8">
-            <p className="text-sm text-red-600">
-              {error}
+      <main className="min-h-screen bg-neutral-50 text-black">
+        <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
+            <p className="text-sm text-red-700">
+              {error ||
+                "Product not found."}
             </p>
 
             <button
@@ -1145,9 +1094,9 @@ export default function EditProductPage() {
                   "/admin/products"
                 )
               }
-              className="mt-6 text-sm font-medium underline underline-offset-4"
+              className="mt-4 text-sm font-medium underline"
             >
-              Back to products
+              Back to Products
             </button>
           </div>
         </div>
@@ -1155,11 +1104,18 @@ export default function EditProductPage() {
     );
   }
 
+  const previewImage =
+    images[0]?.image_url || null;
+
+  const isSold =
+    form.status === "sold";
+
   return (
-    <main className="min-h-screen bg-neutral-50">
-      <div className="mx-auto max-w-[1500px] px-5 py-8 sm:px-8 md:py-10 lg:px-10">
+    <main className="min-h-screen bg-neutral-50 text-black">
+      <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+
         {/* Header */}
-        <header className="mb-8">
+        <div className="mb-6">
           <button
             type="button"
             onClick={() =>
@@ -1167,594 +1123,590 @@ export default function EditProductPage() {
                 "/admin/products"
               )
             }
-            className="text-xs font-medium text-neutral-500 transition hover:text-black"
+            className="mb-4 text-xs font-medium uppercase tracking-[0.14em] text-neutral-400 transition hover:text-black"
           >
-            ← Back to Products
+            Products / Edit
           </button>
 
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <div className="flex items-center gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
-                  Admin
-                </p>
-
-                <span className="h-1 w-1 rounded-full bg-neutral-300" />
-
-                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-400">
-                  Edit Listing
-                </p>
-              </div>
-
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-neutral-950 sm:text-4xl">
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                 Edit Product
               </h1>
 
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-500">
-                Update your product
-                information, photos,
-                pricing, and listing
-                details.
+              <p className="mt-1 text-sm text-neutral-500">
+                Update your listing and
+                preview it before saving.
               </p>
             </div>
 
-            <div className="hidden rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400 sm:block">
-              {productId}
+            <div className="w-fit rounded-lg border border-neutral-200 bg-white px-3 py-2">
+              <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+                Product ID
+              </p>
+
+              <p className="mt-0.5 max-w-[260px] truncate text-xs text-neutral-600">
+                {productId}
+              </p>
             </div>
           </div>
-        </header>
+        </div>
 
+        {/* Messages */}
         {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <p className="text-sm text-red-700">
+              {error}
+            </p>
           </div>
         )}
 
         {success && (
-          <div className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-            {success}
+          <div className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+            <p className="text-sm text-green-700">
+              {success}
+            </p>
+          </div>
+        )}
+
+        {imageProcessingStatus && (
+          <div className="mb-6 rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-sm text-neutral-600">
+              {imageProcessingStatus}
+            </p>
           </div>
         )}
 
         <form
           onSubmit={handleSave}
-          className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_460px]"
+          className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_460px]"
         >
           {/* LEFT */}
-          <div className="space-y-5">
-            {/* 01 Product Information */}
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7">
-              <div className="mb-6 flex items-start gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[10px] font-semibold text-neutral-500">
-                  01
-                </div>
+          <div className="space-y-6">
 
-                <div>
-                  <h2 className="text-base font-semibold text-neutral-950">
-                    Product Information
+            {/* 01 Basic Information */}
+            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold tracking-[0.16em] text-neutral-400">
+                    01
+                  </span>
+
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.12em]">
+                    Basic Information
                   </h2>
-
-                  <p className="mt-1 text-xs leading-5 text-neutral-500">
-                    Basic information
-                    about this listing.
-                  </p>
                 </div>
+
+                <p className="mt-2 text-xs text-neutral-400">
+                  Enter the main information
+                  customers need to identify
+                  the product.
+                </p>
               </div>
 
-              <div className="space-y-5">
+              <div className="grid gap-5">
                 <div>
-                  <label
-                    htmlFor="name"
-                    className="mb-2 block text-xs font-medium text-neutral-700"
-                  >
+                  <label className="mb-2 block text-xs font-medium text-neutral-600">
                     Product Name
                   </label>
 
                   <input
-                    id="name"
-                    name="name"
-                    value={
-                      form.name
+                    type="text"
+                    value={form.name}
+                    onChange={(event) =>
+                      updateField(
+                        "name",
+                        event.target.value
+                      )
                     }
-                    onChange={
-                      handleChange
-                    }
-                    required
-                    className="h-12 w-full rounded-xl border border-neutral-200 bg-white px-4 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                    placeholder="e.g. Uniqlo UT Graphic T-Shirt"
+                    disabled={saving}
+                    className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
 
                 <div className="grid gap-5 sm:grid-cols-2">
                   <div>
-                    <label
-                      htmlFor="brand"
-                      className="mb-2 block text-xs font-medium text-neutral-700"
-                    >
+                    <label className="mb-2 block text-xs font-medium text-neutral-600">
                       Brand
                     </label>
 
                     <input
-                      id="brand"
-                      name="brand"
-                      value={
-                        form.brand
+                      type="text"
+                      value={form.brand}
+                      onChange={(event) =>
+                        updateField(
+                          "brand",
+                          event.target.value
+                        )
                       }
-                      onChange={
-                        handleChange
-                      }
-                      required
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-white px-4 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                      placeholder="e.g. Uniqlo"
+                      disabled={saving}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                     />
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="category"
-                      className="mb-2 block text-xs font-medium text-neutral-700"
-                    >
+                    <label className="mb-2 block text-xs font-medium text-neutral-600">
                       Category
                     </label>
 
                     <select
-                      id="category"
-                      name="category"
                       value={
                         form.category
                       }
-                      onChange={
-                        handleChange
+                      onChange={(event) =>
+                        updateField(
+                          "category",
+                          event.target.value
+                        )
                       }
-                      required
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-white px-4 text-sm text-neutral-950 outline-none transition focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                      disabled={saving}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <option value="">
                         Select category
                       </option>
 
-                      <option value="T-Shirts">
-                        T-Shirts
-                      </option>
-
-                      <option value="Shirts">
-                        Shirts
-                      </option>
-
-                      <option value="Polo">
-                        Polo
-                      </option>
-
-                      <option value="Sweatshirts">
-                        Sweatshirts
-                      </option>
-
-                      <option value="Hoodies">
-                        Hoodies
-                      </option>
-
-                      <option value="Jackets">
-                        Jackets
-                      </option>
-
-                      <option value="Jeans">
-                        Jeans
-                      </option>
-
-                      <option value="Pants">
-                        Pants
-                      </option>
-
-                      <option value="Shorts">
-                        Shorts
-                      </option>
-
-                      <option value="Sportswear">
-                        Sportswear
-                      </option>
-
-                      <option value="Other">
-                        Other
-                      </option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid gap-5 sm:grid-cols-3">
-                  <div>
-                    <label
-                      htmlFor="price"
-                      className="mb-2 block text-xs font-medium text-neutral-700"
-                    >
-                      Price
-                    </label>
-
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400">
-                        ₱
-                      </span>
-
-                      <input
-                        id="price"
-                        name="price"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={
-                          form.price
-                        }
-                        onChange={
-                          handleChange
-                        }
-                        required
-                        className="h-12 w-full rounded-xl border border-neutral-200 bg-white py-3 pl-8 pr-4 text-sm text-neutral-950 outline-none transition focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="originalPrice"
-                      className="mb-2 block text-xs font-medium text-neutral-700"
-                    >
-                      Original Price
-                    </label>
-
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400">
-                        ₱
-                      </span>
-
-                      <input
-                        id="originalPrice"
-                        name="originalPrice"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={
-                          form.originalPrice
-                        }
-                        onChange={
-                          handleChange
-                        }
-                        className="h-12 w-full rounded-xl border border-neutral-200 bg-white py-3 pl-8 pr-4 text-sm text-neutral-950 outline-none transition focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="status"
-                      className="mb-2 block text-xs font-medium text-neutral-700"
-                    >
-                      Status
-                    </label>
-
-                    <select
-                      id="status"
-                      name="status"
-                      value={
-                        form.status
-                      }
-                      onChange={
-                        handleChange
-                      }
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-white px-4 text-sm text-neutral-950 outline-none transition focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                    >
-                      <option value="available">
-                        Available
-                      </option>
-
-                      <option value="sold">
-                        Sold
-                      </option>
+                      {categoryOptions.map(
+                        (category) => (
+                          <option
+                            key={category}
+                            value={
+                              category
+                            }
+                          >
+                            {category}
+                          </option>
+                        )
+                      )}
                     </select>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* 02 Details */}
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7">
-              <div className="mb-6 flex items-start gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[10px] font-semibold text-neutral-500">
-                  02
-                </div>
+            {/* 02 Pricing */}
+            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold tracking-[0.16em] text-neutral-400">
+                    02
+                  </span>
 
-                <div>
-                  <h2 className="text-base font-semibold text-neutral-950">
-                    Details
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.12em]">
+                    Pricing
                   </h2>
-
-                  <p className="mt-1 text-xs leading-5 text-neutral-500">
-                    Add the key details
-                    customers need.
-                  </p>
                 </div>
+
+                <p className="mt-2 text-xs text-neutral-400">
+                  Set the selling price and
+                  optionally show the original
+                  retail price.
+                </p>
               </div>
 
-              <div className="space-y-5">
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <div>
-                    <label
-                      htmlFor="size"
-                      className="mb-2 block text-xs font-medium text-neutral-700"
-                    >
-                      Size
-                    </label>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-neutral-600">
+                    Selling Price
+                  </label>
+
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400">
+                      ₱
+                    </span>
 
                     <input
-                      id="size"
-                      name="size"
+                      type="number"
+                      min="0"
+                      step="0.01"
                       value={
-                        form.size
+                        form.price
                       }
-                      onChange={
-                        handleChange
+                      onChange={(event) =>
+                        updateField(
+                          "price",
+                          event.target.value
+                        )
                       }
-                      required
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-white px-4 text-sm outline-none transition focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="color"
-                      className="mb-2 block text-xs font-medium text-neutral-700"
-                    >
-                      Color
-                    </label>
-
-                    <input
-                      id="color"
-                      name="color"
-                      value={
-                        form.color
-                      }
-                      onChange={
-                        handleChange
-                      }
-                      required
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-white px-4 text-sm outline-none transition focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                      placeholder="0"
+                      disabled={saving}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 pl-9 pr-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="condition"
-                    className="mb-2 block text-xs font-medium text-neutral-700"
-                  >
+                  <label className="mb-2 block text-xs font-medium text-neutral-600">
+                    Original Price
+                  </label>
+
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400">
+                      ₱
+                    </span>
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={
+                        form.originalPrice
+                      }
+                      onChange={(event) =>
+                        updateField(
+                          "originalPrice",
+                          event.target.value
+                        )
+                      }
+                      placeholder="Optional"
+                      disabled={saving}
+                      className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 pl-9 pr-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* 03 Product Details */}
+            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold tracking-[0.16em] text-neutral-400">
+                    03
+                  </span>
+
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.12em]">
+                    Product Details
+                  </h2>
+                </div>
+
+                <p className="mt-2 text-xs text-neutral-400">
+                  Add the size, color,
+                  condition, and current
+                  listing status.
+                </p>
+              </div>
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-neutral-600">
+                    Size
+                  </label>
+
+                  <input
+                    type="text"
+                    value={form.size}
+                    onChange={(event) =>
+                      updateField(
+                        "size",
+                        event.target.value
+                      )
+                    }
+                    placeholder="e.g. Medium"
+                    disabled={saving}
+                    className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-neutral-600">
+                    Color
+                  </label>
+
+                  <input
+                    type="text"
+                    value={form.color}
+                    onChange={(event) =>
+                      updateField(
+                        "color",
+                        event.target.value
+                      )
+                    }
+                    placeholder="e.g. Black"
+                    disabled={saving}
+                    className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-neutral-600">
                     Condition
                   </label>
 
                   <input
-                    id="condition"
-                    name="condition"
+                    type="text"
                     value={
                       form.condition
                     }
-                    onChange={
-                      handleChange
+                    onChange={(event) =>
+                      updateField(
+                        "condition",
+                        event.target.value
+                      )
                     }
-                    required
-                    placeholder="e.g. 9/10 — Good pre-loved condition"
-                    className="h-12 w-full rounded-xl border border-neutral-200 bg-white px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                    placeholder="e.g. 9/10 — Good condition"
+                    disabled={saving}
+                    className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-neutral-600">
+                    Status
+                  </label>
+
+                  <select
+                    value={
+                      form.status
+                    }
+                    onChange={(event) =>
+                      updateField(
+                        "status",
+                        event.target.value as
+                          | "available"
+                          | "sold"
+                      )
+                    }
+                    disabled={saving}
+                    className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="available">
+                      Available
+                    </option>
+
+                    <option value="sold">
+                      Sold
+                    </option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            {/* 04 Measurements */}
+            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold tracking-[0.16em] text-neutral-400">
+                    04
+                  </span>
+
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.12em]">
+                    Measurements
+                  </h2>
+                </div>
+
+                <p className="mt-2 text-xs text-neutral-400">
+                  Add measurements when
+                  available. These will appear
+                  in the customer preview.
+                </p>
+              </div>
+
+              <div className="grid gap-5 sm:grid-cols-3">
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-neutral-600">
+                    Length
+                  </label>
+
+                  <input
+                    type="text"
+                    value={
+                      form.length
+                    }
+                    onChange={(event) =>
+                      updateField(
+                        "length",
+                        event.target.value
+                      )
+                    }
+                    placeholder="e.g. 27 in"
+                    disabled={saving}
+                    className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-neutral-600">
+                    Width
+                  </label>
+
+                  <input
+                    type="text"
+                    value={
+                      form.width
+                    }
+                    onChange={(event) =>
+                      updateField(
+                        "width",
+                        event.target.value
+                      )
+                    }
+                    placeholder="e.g. 19 in"
+                    disabled={saving}
+                    className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-neutral-600">
+                    Waist
+                  </label>
+
+                  <input
+                    type="text"
+                    value={
+                      form.waist
+                    }
+                    onChange={(event) =>
+                      updateField(
+                        "waist",
+                        event.target.value
+                      )
+                    }
+                    placeholder="e.g. 30 in"
+                    disabled={saving}
+                    className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
               </div>
             </section>
 
-            {/* 03 Measurements */}
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7">
-              <div className="mb-6 flex items-start gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[10px] font-semibold text-neutral-500">
-                  03
-                </div>
+            {/* 05 Description */}
+            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold tracking-[0.16em] text-neutral-400">
+                    05
+                  </span>
 
-                <div>
-                  <h2 className="text-base font-semibold text-neutral-950">
-                    Measurements
-                  </h2>
-
-                  <p className="mt-1 text-xs leading-5 text-neutral-500">
-                    Use inches for
-                    consistency.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-5 sm:grid-cols-3">
-                <div>
-                  <label
-                    htmlFor="length"
-                    className="mb-2 block text-xs font-medium text-neutral-700"
-                  >
-                    Length
-                  </label>
-
-                  <div className="relative">
-                    <input
-                      id="length"
-                      name="length"
-                      value={
-                        form.length
-                      }
-                      onChange={
-                        handleChange
-                      }
-                      placeholder="27"
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-white px-4 pr-12 text-sm outline-none transition placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                    />
-
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-neutral-400">
-                      in
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="width"
-                    className="mb-2 block text-xs font-medium text-neutral-700"
-                  >
-                    Width
-                  </label>
-
-                  <div className="relative">
-                    <input
-                      id="width"
-                      name="width"
-                      value={
-                        form.width
-                      }
-                      onChange={
-                        handleChange
-                      }
-                      placeholder="19"
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-white px-4 pr-12 text-sm outline-none transition placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                    />
-
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-neutral-400">
-                      in
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="waist"
-                    className="mb-2 block text-xs font-medium text-neutral-700"
-                  >
-                    Waist
-                  </label>
-
-                  <div className="relative">
-                    <input
-                      id="waist"
-                      name="waist"
-                      value={
-                        form.waist
-                      }
-                      onChange={
-                        handleChange
-                      }
-                      placeholder="27"
-                      className="h-12 w-full rounded-xl border border-neutral-200 bg-white px-4 pr-12 text-sm outline-none transition placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                    />
-
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-neutral-400">
-                      in
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* 04 Description */}
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7">
-              <div className="mb-6 flex items-start gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[10px] font-semibold text-neutral-500">
-                  04
-                </div>
-
-                <div>
-                  <h2 className="text-base font-semibold text-neutral-950">
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.12em]">
                     Description
                   </h2>
-
-                  <p className="mt-1 text-xs leading-5 text-neutral-500">
-                    Give customers
-                    useful information
-                    about the item.
-                  </p>
                 </div>
+
+                <p className="mt-2 text-xs text-neutral-400">
+                  Add any additional details
+                  customers should know about
+                  the item.
+                </p>
               </div>
 
               <textarea
-                id="description"
-                name="description"
                 value={
                   form.description
                 }
-                onChange={
-                  handleChange
+                onChange={(event) =>
+                  updateField(
+                    "description",
+                    event.target.value
+                  )
                 }
+                placeholder="Describe the item, condition details, flaws, fit, or anything else customers should know."
                 rows={7}
-                placeholder="Add product details, flaws, fit notes, or other information..."
-                className="w-full resize-y rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                disabled={saving}
+                className="w-full resize-y rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
               />
             </section>
 
-            {/* 05 Product Photos */}
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7">
-              <div className="mb-6 flex items-start gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[10px] font-semibold text-neutral-500">
-                  05
-                </div>
+            {/* 06 Product Photos */}
+            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold tracking-[0.16em] text-neutral-400">
+                    06
+                  </span>
 
-                <div>
-                  <h2 className="text-base font-semibold text-neutral-950">
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.12em]">
                     Product Photos
                   </h2>
-
-                  <p className="mt-1 text-xs leading-5 text-neutral-500">
-                    Add clear photos of
-                    the product. The
-                    first photo is used
-                    as the main listing
-                    image.
-                  </p>
                 </div>
+
+                <p className="mt-2 text-xs text-neutral-400">
+                  Manage your listing photos.
+                  The first photo is used as
+                  the main product image.
+                </p>
               </div>
 
-              {imageError && (
-                <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {imageError}
-                </div>
-              )}
+              {images.length === 0 ? (
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-6 py-12 text-center transition hover:border-neutral-500 hover:bg-neutral-100">
+                  <span className="text-sm font-medium">
+                    Add product photos
+                  </span>
 
-              {images.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                  {images.map(
-                    (
-                      image,
-                      index
-                    ) => {
-                      const isMain =
-                        image.image_url ===
-                        mainImage;
+                  <span className="mt-1 text-xs text-neutral-400">
+                    JPG, PNG, WEBP, HEIC, or
+                    HEIF
+                  </span>
 
-                      return (
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={
+                      handleAddImages
+                    }
+                    disabled={
+                      uploading ||
+                      saving
+                    }
+                    className="hidden"
+                  />
+                </label>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                    {images.map(
+                      (
+                        image,
+                        index
+                      ) => (
                         <div
                           key={
                             image.id
                           }
-                          className="group relative"
+                          className="group relative aspect-[4/5] overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100"
                         >
-                          <div
-                            className={`relative aspect-[4/5] overflow-hidden rounded-xl bg-neutral-100 ${
-                              isMain
-                                ? "ring-2 ring-black ring-offset-2"
-                                : ""
+                          <NextImage
+                            src={
+                              image.image_url
+                            }
+                            alt={`${form.name} photo ${
+                              index + 1
                             }`}
-                          >
-                            <NextImage
-                              src={
-                                image.image_url
-                              }
-                              alt={`${form.name} photo ${
-                                index +
-                                1
-                              }`}
-                              fill
-                              unoptimized
-                              className="object-cover transition duration-300 group-hover:scale-[1.02]"
-                              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 220px"
-                            />
+                            fill
+                            unoptimized
+                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 200px"
+                            className="object-cover"
+                          />
 
-                            {isMain && (
-                              <div className="absolute left-2 top-2 rounded-full bg-black px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-white">
-                                Main
-                              </div>
+                          {index ===
+                            0 && (
+                            <div className="absolute left-2 top-2 rounded-md bg-black px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-white">
+                              Main
+                            </div>
+                          )}
+
+                          <div className="absolute inset-x-2 bottom-2 flex gap-2 opacity-0 transition group-hover:opacity-100">
+                            {index !==
+                              0 && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleSetMain(
+                                    image
+                                  )
+                                }
+                                disabled={
+                                  uploading ||
+                                  saving
+                                }
+                                className="flex-1 rounded-lg bg-white px-2 py-2 text-[10px] font-medium shadow-sm transition hover:bg-neutral-100 disabled:opacity-50"
+                              >
+                                Set Main
+                              </button>
                             )}
 
                             <button
@@ -1765,286 +1717,298 @@ export default function EditProductPage() {
                                 )
                               }
                               disabled={
-                                imageLoading
+                                uploading ||
+                                saving
                               }
-                              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-xs text-red-600 opacity-0 shadow-sm transition hover:bg-white group-hover:opacity-100 disabled:cursor-not-allowed"
-                              aria-label="Delete photo"
+                              className="rounded-lg bg-black px-3 py-2 text-[10px] font-medium text-white transition hover:bg-neutral-800 disabled:opacity-50"
                             >
-                              ×
+                              Delete
                             </button>
-
-                            {!isMain && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleSetMainImage(
-                                    image
-                                  )
-                                }
-                                disabled={
-                                  imageLoading
-                                }
-                                className="absolute inset-x-2 bottom-2 rounded-lg bg-white/95 px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-black opacity-0 shadow-sm transition hover:bg-white group-hover:opacity-100 disabled:cursor-not-allowed"
-                              >
-                                Set as Main
-                              </button>
-                            )}
                           </div>
                         </div>
-                      );
-                    }
-                  )}
-                </div>
-              )}
+                      )
+                    )}
+                  </div>
 
-              <label
-                className={`mt-4 flex min-h-32 items-center justify-center rounded-xl border border-dashed px-6 py-8 text-center transition ${
-                  imageLoading
-                    ? "cursor-not-allowed border-neutral-200 bg-neutral-50"
-                    : "cursor-pointer border-neutral-300 bg-neutral-50/50 hover:border-neutral-500 hover:bg-neutral-50"
-                }`}
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <label className="flex h-11 cursor-pointer items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-xs font-medium transition hover:border-black hover:bg-neutral-50">
+                      Add more
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={
+                          handleAddImages
+                        }
+                        disabled={
+                          uploading ||
+                          saving
+                        }
+                        className="hidden"
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const confirmed =
+                          window.confirm(
+                            "Remove all product photos? This cannot be undone."
+                          );
+
+                        if (
+                          !confirmed
+                        ) {
+                          return;
+                        }
+
+                        setError("");
+                        setSuccess("");
+
+                        try {
+                          const paths =
+                            images
+                              .map(
+                                (
+                                  image
+                                ) =>
+                                  getStoragePathFromUrl(
+                                    image.image_url
+                                  )
+                              )
+                              .filter(
+                                (
+                                  path
+                                ): path is string =>
+                                  Boolean(
+                                    path
+                                  )
+                              );
+
+                          if (
+                            paths.length >
+                            0
+                          ) {
+                            await supabase.storage
+                              .from(
+                                "product-images"
+                              )
+                              .remove(
+                                paths
+                              );
+                          }
+
+                          const {
+                            error:
+                              deleteError,
+                          } =
+                            await supabase
+                              .from(
+                                "product_images"
+                              )
+                              .delete()
+                              .eq(
+                                "product_id",
+                                productId
+                              );
+
+                          if (
+                            deleteError
+                          ) {
+                            throw deleteError;
+                          }
+
+                          const {
+                            error:
+                              productError,
+                          } =
+                            await supabase
+                              .from(
+                                "products"
+                              )
+                              .update({
+                                image:
+                                  null,
+                              })
+                              .eq(
+                                "id",
+                                productId
+                              );
+
+                          if (
+                            productError
+                          ) {
+                            throw productError;
+                          }
+
+                          setImages(
+                            []
+                          );
+
+                          setSuccess(
+                            "All photos removed."
+                          );
+                        } catch (err) {
+                          console.error(
+                            "Error clearing photos:",
+                            err
+                          );
+
+                          setError(
+                            err instanceof
+                              Error
+                              ? err.message
+                              : "Could not remove photos."
+                          );
+                        }
+                      }}
+                      disabled={
+                        uploading ||
+                        saving
+                      }
+                      className="h-11 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-medium text-neutral-600 transition hover:border-red-300 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
+
+            {/* Mobile Actions */}
+            <div className="flex flex-col gap-3 sm:flex-row lg:hidden">
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    "/admin/products"
+                  )
+                }
+                disabled={
+                  saving ||
+                  uploading
+                }
+                className="h-12 rounded-xl border border-neutral-200 bg-white px-5 text-sm font-medium transition hover:border-black disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  disabled={
-                    imageLoading
-                  }
-                  onChange={
-                    handleAddImages
-                  }
-                  className="sr-only"
-                />
+                Cancel
+              </button>
 
-                <div>
-                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 bg-white text-lg text-neutral-400">
-                    +
-                  </div>
-
-                  <p className="mt-3 text-sm font-medium text-neutral-900">
-                    {imageLoading
-                      ? imageProcessingStatus ||
-                        "Processing..."
-                      : images.length >
-                        0
-                      ? "Add more photos"
-                      : "Add product photos"}
-                  </p>
-
-                  {!imageLoading && (
-                    <>
-                      <p className="mt-1 text-xs text-neutral-500">
-                        Select one or
-                        multiple photos
-                      </p>
-
-                      <p className="mt-1 text-[10px] text-neutral-400">
-                        JPG, PNG, HEIC,
-                        and other
-                        image formats
-                        supported
-                      </p>
-                    </>
-                  )}
-                </div>
-              </label>
-
-              {imageLoading && (
-                <div className="mt-4">
-                  <div className="h-1 overflow-hidden rounded-full bg-neutral-100">
-                    <div className="h-full w-1/2 animate-pulse rounded-full bg-black" />
-                  </div>
-
-                  <p className="mt-2 text-xs text-neutral-500">
-                    {imageProcessingStatus ||
-                      "Processing..."}
-                  </p>
-                </div>
-              )}
-            </section>
-
-            {/* 06 Save */}
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7">
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-neutral-950">
-                    Ready to save?
-                  </p>
-
-                  <p className="mt-1 text-xs leading-5 text-neutral-500">
-                    Your product
-                    information will be
-                    updated immediately.
-                  </p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={
-                    saving ||
-                    imageLoading
-                  }
-                  className="h-12 rounded-xl bg-black px-7 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {saving
-                    ? "Saving..."
-                    : "Save Changes"}
-                </button>
-              </div>
-            </section>
+              <button
+                type="submit"
+                disabled={
+                  saving ||
+                  uploading
+                }
+                className="h-12 flex-1 rounded-xl bg-black px-5 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving
+                  ? "Saving..."
+                  : "Save Changes"}
+              </button>
+            </div>
 
             {/* Danger Zone */}
-            <section className="rounded-2xl border border-red-200 bg-white p-5 sm:p-7">
-              <div className="flex items-start gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-50 text-[10px] font-semibold text-red-500">
-                  !
-                </div>
+            <section className="rounded-2xl border border-red-200 bg-white p-5 sm:p-6">
+              <div className="mb-5">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold tracking-[0.16em] text-red-400">
+                    07
+                  </span>
 
-                <div>
-                  <h2 className="text-base font-semibold text-neutral-950">
-                    Delete Product
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-red-600">
+                    Danger Zone
                   </h2>
-
-                  <p className="mt-1 max-w-xl text-xs leading-5 text-neutral-500">
-                    Permanently removes
-                    this product and
-                    all of its uploaded
-                    photos. This action
-                    cannot be undone.
-                  </p>
                 </div>
+
+                <p className="mt-2 text-xs text-neutral-400">
+                  Permanently delete this
+                  product and its uploaded
+                  photos.
+                </p>
               </div>
 
-              <div className="mt-5">
-                {!deleteConfirm ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDeleteConfirm(
-                        true
-                      )
-                    }
-                    className="h-11 rounded-xl border border-red-200 px-5 text-xs font-semibold uppercase tracking-[0.1em] text-red-600 transition hover:bg-red-50"
-                  >
-                    Delete Product
-                  </button>
-                ) : (
-                  <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                    <p className="text-sm font-medium text-red-700">
-                      Are you sure you
-                      want to delete this
-                      product?
-                    </p>
-
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={
-                          handleDeleteProduct
-                        }
-                        disabled={
-                          deleting
-                        }
-                        className="h-11 rounded-xl bg-red-600 px-5 text-xs font-semibold uppercase tracking-[0.1em] text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {deleting
-                          ? "Deleting..."
-                          : "Yes, Delete"}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDeleteConfirm(
-                            false
-                          )
-                        }
-                        disabled={
-                          deleting
-                        }
-                        className="h-11 rounded-xl border border-neutral-200 bg-white px-5 text-xs font-semibold uppercase tracking-[0.1em] text-neutral-900 transition hover:bg-neutral-50 disabled:opacity-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={
+                  handleDeleteProduct
+                }
+                disabled={
+                  saving ||
+                  uploading
+                }
+                className="h-11 rounded-xl border border-red-200 px-4 text-xs font-medium text-red-600 transition hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Delete Product
+              </button>
             </section>
           </div>
 
-          {/* RIGHT — LISTING PREVIEW */}
+          {/* RIGHT PREVIEW */}
           <aside className="lg:sticky lg:top-6 lg:self-start">
-            <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+            <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+
               {/* Preview Header */}
-              <div className="border-b border-neutral-100 px-5 py-4">
+              <div className="border-b border-neutral-200 px-5 py-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
                       Customer View
                     </p>
 
-                    <h2 className="mt-1 text-sm font-semibold text-neutral-950">
+                    <h2 className="mt-1 text-sm font-semibold">
                       Listing Preview
                     </h2>
                   </div>
 
-                  <span className="rounded-full bg-green-50 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-green-700">
+                  <span className="rounded-full bg-green-50 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-green-700">
                     Live
                   </span>
                 </div>
               </div>
 
-              {/* Main Preview Image */}
+              {/* Main Image */}
               <div className="p-4">
                 <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-neutral-100">
-                  {mainImage ? (
+                  {previewImage ? (
                     <NextImage
                       src={
-                        mainImage
+                        previewImage
                       }
                       alt={
                         form.name ||
                         "Product preview"
                       }
                       fill
-                      priority
                       unoptimized
-                      className={`object-cover transition duration-500 ${
-                        form.status ===
-                        "sold"
+                      sizes="(max-width: 1024px) 100vw, 460px"
+                      className={`object-cover transition ${
+                        isSold
                           ? "opacity-60"
                           : ""
                       }`}
-                      sizes="460px"
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center">
-                      <div className="text-center">
-                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-xl text-neutral-300">
-                          +
-                        </div>
-
-                        <p className="mt-3 text-xs text-neutral-400">
-                          No product
-                          image
-                        </p>
-                      </div>
+                      <p className="text-xs text-neutral-400">
+                        No product photo
+                      </p>
                     </div>
                   )}
 
-                  {form.status ===
-                    "sold" && (
-                    <div className="absolute left-3 top-3 rounded-full bg-black px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-white">
-                      Sold
-                    </div>
+                  {isSold && (
+                    <>
+                      <div className="absolute inset-0 bg-white/20" />
+
+                      <div className="absolute left-4 top-4 bg-black px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-white">
+                        Sold
+                      </div>
+                    </>
                   )}
                 </div>
 
                 {/* Thumbnails */}
                 {images.length >
-                  0 && (
+                  1 && (
                   <div className="mt-3 grid grid-cols-5 gap-2">
                     {images
                       .slice(
@@ -2053,59 +2017,64 @@ export default function EditProductPage() {
                       )
                       .map(
                         (
-                          image
+                          image,
+                          index
                         ) => (
-                          <button
+                          <div
                             key={
                               image.id
                             }
-                            type="button"
-                            onClick={() =>
-                              setMainImage(
-                                image.image_url
-                              )
-                            }
-                            className={`relative aspect-square overflow-hidden rounded-lg bg-neutral-100 transition ${
-                              image.image_url ===
-                              mainImage
-                                ? "ring-2 ring-black ring-offset-1"
-                                : "opacity-70 hover:opacity-100"
+                            className={`relative aspect-square overflow-hidden rounded-lg bg-neutral-100 ${
+                              index ===
+                              0
+                                ? "ring-1 ring-black"
+                                : ""
                             }`}
                           >
                             <NextImage
                               src={
                                 image.image_url
                               }
-                              alt=""
+                              alt={`${form.name} thumbnail ${
+                                index +
+                                1
+                              }`}
                               fill
                               unoptimized
-                              className="object-cover"
                               sizes="80px"
+                              className="object-cover"
                             />
-                          </button>
+                          </div>
                         )
                       )}
                   </div>
                 )}
-              </div>
 
-              {/* Product Information */}
-              <div className="border-t border-neutral-100 px-5 py-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
-                      {form.brand ||
-                        "Brand"}
-                    </p>
+                {/* Product Info */}
+                <div className="pt-5">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+                    {form.category ||
+                      "Category"}
+                  </p>
 
-                    <h3 className="mt-1 text-base font-semibold leading-5 text-neutral-950">
-                      {form.name ||
-                        "Product Name"}
-                    </h3>
-                  </div>
+                  <p className="mt-2 text-xs uppercase tracking-[0.12em] text-neutral-400">
+                    {form.brand ||
+                      "Brand"}
+                  </p>
 
-                  <div className="shrink-0 text-right">
-                    <p className="text-base font-semibold text-neutral-950">
+                  <h3 className="mt-1 text-lg font-medium leading-tight">
+                    {form.name ||
+                      "Product Name"}
+                  </h3>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <p
+                      className={`text-base font-semibold ${
+                        isSold
+                          ? "text-neutral-400"
+                          : "text-black"
+                      }`}
+                    >
                       ₱
                       {form.price
                         ? Number(
@@ -2115,7 +2084,7 @@ export default function EditProductPage() {
                     </p>
 
                     {form.originalPrice && (
-                      <p className="mt-0.5 text-[10px] text-neutral-400 line-through">
+                      <p className="text-xs text-neutral-400 line-through">
                         ₱
                         {Number(
                           form.originalPrice
@@ -2123,160 +2092,143 @@ export default function EditProductPage() {
                       </p>
                     )}
                   </div>
-                </div>
 
-                {/* Tags */}
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {form.size && (
-                    <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.08em] text-neutral-600">
-                      {form.size}
-                    </span>
-                  )}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {form.size && (
+                      <span className="rounded-full bg-neutral-100 px-3 py-1.5 text-[10px] text-neutral-600">
+                        Size{" "}
+                        {form.size}
+                      </span>
+                    )}
 
-                  {form.color && (
-                    <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.08em] text-neutral-600">
-                      {form.color}
-                    </span>
-                  )}
+                    {form.color && (
+                      <span className="rounded-full bg-neutral-100 px-3 py-1.5 text-[10px] text-neutral-600">
+                        {
+                          form.color
+                        }
+                      </span>
+                    )}
 
-                  {form.category && (
-                    <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.08em] text-neutral-600">
-                      {form.category}
-                    </span>
-                  )}
-                </div>
-
-                {/* Condition */}
-                {form.condition && (
-                  <div className="mt-5 border-t border-neutral-100 pt-4">
-                    <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
-                      Condition
-                    </p>
-
-                    <p className="mt-1 text-xs leading-5 text-neutral-600">
-                      {
-                        form.condition
-                      }
-                    </p>
+                    {form.condition && (
+                      <span className="rounded-full bg-neutral-100 px-3 py-1.5 text-[10px] text-neutral-600">
+                        {
+                          form.condition
+                        }
+                      </span>
+                    )}
                   </div>
-                )}
 
-                {/* Measurements */}
-                {(form.length ||
-                  form.width ||
-                  form.waist) && (
-                  <div className="mt-5 border-t border-neutral-100 pt-4">
-                    <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
-                      Measurements
-                    </p>
+                  {(form.length ||
+                    form.width ||
+                    form.waist) && (
+                    <div className="mt-5 border-t border-neutral-200 pt-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+                        Measurements
+                      </p>
 
-                    <div className="mt-2 grid grid-cols-3 gap-2">
-                      {form.length && (
-                        <div className="rounded-lg bg-neutral-50 px-2.5 py-2">
-                          <p className="text-[9px] text-neutral-400">
-                            Length
-                          </p>
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        {form.length && (
+                          <div>
+                            <p className="text-[9px] uppercase tracking-wide text-neutral-400">
+                              Length
+                            </p>
 
-                          <p className="mt-0.5 text-xs font-medium">
-                            {
-                              form.length
-                            }{" "}
-                            in
-                          </p>
-                        </div>
-                      )}
+                            <p className="mt-0.5 text-xs">
+                              {
+                                form.length
+                              }
+                            </p>
+                          </div>
+                        )}
 
-                      {form.width && (
-                        <div className="rounded-lg bg-neutral-50 px-2.5 py-2">
-                          <p className="text-[9px] text-neutral-400">
-                            Width
-                          </p>
+                        {form.width && (
+                          <div>
+                            <p className="text-[9px] uppercase tracking-wide text-neutral-400">
+                              Width
+                            </p>
 
-                          <p className="mt-0.5 text-xs font-medium">
-                            {
-                              form.width
-                            }{" "}
-                            in
-                          </p>
-                        </div>
-                      )}
+                            <p className="mt-0.5 text-xs">
+                              {
+                                form.width
+                              }
+                            </p>
+                          </div>
+                        )}
 
-                      {form.waist && (
-                        <div className="rounded-lg bg-neutral-50 px-2.5 py-2">
-                          <p className="text-[9px] text-neutral-400">
-                            Waist
-                          </p>
+                        {form.waist && (
+                          <div>
+                            <p className="text-[9px] uppercase tracking-wide text-neutral-400">
+                              Waist
+                            </p>
 
-                          <p className="mt-0.5 text-xs font-medium">
-                            {
-                              form.waist
-                            }{" "}
-                            in
-                          </p>
-                        </div>
-                      )}
+                            <p className="mt-0.5 text-xs">
+                              {
+                                form.waist
+                              }
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Description */}
-                {form.description && (
-                  <div className="mt-5 border-t border-neutral-100 pt-4">
-                    <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
-                      Description
-                    </p>
+                  {form.description && (
+                    <div className="mt-5 border-t border-neutral-200 pt-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+                        Description
+                      </p>
 
-                    <p className="mt-1 line-clamp-5 text-xs leading-5 text-neutral-600">
-                      {
-                        form.description
-                      }
-                    </p>
-                  </div>
-                )}
+                      <p className="mt-2 whitespace-pre-line text-xs leading-5 text-neutral-600">
+                        {
+                          form.description
+                        }
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
 
-                {/* Desktop Action */}
+            {/* Desktop Actions */}
+            <div className="mt-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+              <div className="flex gap-3">
                 <button
                   type="button"
-                  disabled={
-                    form.status ===
-                    "sold"
+                  onClick={() =>
+                    router.push(
+                      "/admin/products"
+                    )
                   }
-                  className="mt-5 hidden h-11 w-full rounded-xl bg-black text-xs font-semibold uppercase tracking-[0.1em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 sm:block"
+                  disabled={
+                    saving ||
+                    uploading
+                  }
+                  className="h-12 flex-1 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-medium transition hover:border-black disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {form.status ===
-                  "sold"
-                    ? "Sold Out"
-                    : "Add to Cart"}
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={
+                    saving ||
+                    uploading
+                  }
+                  className="h-12 flex-1 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving
+                    ? "Saving..."
+                    : "Save Changes"}
                 </button>
               </div>
             </div>
 
-            {/* Preview Save Button */}
-            <div className="mt-4 rounded-2xl border border-neutral-200 bg-white p-4">
-              <button
-                type="submit"
-                disabled={
-                  saving ||
-                  imageLoading
-                }
-                className="h-12 w-full rounded-xl bg-black text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {saving
-                  ? "Saving Changes..."
-                  : "Save Changes"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  router.push(
-                    "/admin/products"
-                  )
-                }
-                className="mt-2 h-11 w-full rounded-xl text-xs font-medium text-neutral-500 transition hover:bg-neutral-50 hover:text-black"
-              >
-                Cancel
-              </button>
+            <div className="mt-3 px-1">
+              <p className="text-[10px] leading-4 text-neutral-400">
+                This preview updates
+                automatically as you edit the
+                listing.
+              </p>
             </div>
           </aside>
         </form>

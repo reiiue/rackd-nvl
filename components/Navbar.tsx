@@ -89,13 +89,13 @@ export default function Navbar() {
                 Shop
               </Link>
 
-              <Link
+              {/* <Link
                 href="/about"
                 onClick={closeMenu}
                 className="py-4 text-sm"
               >
                 About
-              </Link>
+              </Link> */}
             </div>
           </nav>
         </div>

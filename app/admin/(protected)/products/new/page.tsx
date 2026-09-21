@@ -817,9 +817,7 @@ export default function NewProductPage() {
                       required
                       value={category}
                       onChange={(event) =>
-                        setCategory(
-                          event.target.value
-                        )
+                        setCategory(event.target.value)
                       }
                       disabled={loading}
                       className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm outline-none transition focus:border-black focus:bg-white focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:opacity-60"
@@ -836,6 +834,10 @@ export default function NewProductPage() {
                         Shirts
                       </option>
 
+                      <option value="Polo">
+                        Polo
+                      </option>
+
                       <option value="Sweatshirts">
                         Sweatshirts
                       </option>
@@ -848,6 +850,10 @@ export default function NewProductPage() {
                         Jackets
                       </option>
 
+                      <option value="Jeans">
+                        Jeans
+                      </option>
+
                       <option value="Pants">
                         Pants
                       </option>
@@ -856,12 +862,16 @@ export default function NewProductPage() {
                         Shorts
                       </option>
 
+                      <option value="Sportswear">
+                        Sportswear
+                      </option>
+
                       <option value="Other">
                         Other
                       </option>
                     </select>
                   </div>
-                </div>
+                                  </div>
               </section>
 
               {/* Pricing */}
@@ -1526,14 +1536,6 @@ export default function NewProductPage() {
                     </p>
                   </div>
                 )}
-
-                <button
-                  type="button"
-                  disabled
-                  className="mt-6 h-12 w-full rounded-xl bg-black text-sm font-semibold !text-white opacity-100"
-                >
-                  DM to Order
-                </button>
 
                 <p className="mt-3 text-center text-[10px] text-neutral-400">
                   This is a preview of how your listing will appear.
